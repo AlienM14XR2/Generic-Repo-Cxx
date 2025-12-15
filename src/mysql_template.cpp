@@ -35,6 +35,7 @@
 #include <sstream>
 #include <string_view> // C++17以降 @see void safe_print(const char* p)
 
+#include <ObjectPool.hpp>
 #include <Repository.hpp>
 #include <mysql/jdbc.h>
 #include <mysqlx/xdevapi.h>
@@ -233,44 +234,71 @@ tmp::ValueType convertSqlValueToVarNode_Corrected(const mysqlx::Value& sql_val) 
 template <class ID>
 class VarNodeRepository : public tmp::Repository<ID, tmp::VarNode> {
 private:
-    mysqlx::Session* const session;
+    // mysqlx::Session* const session;
+    ObjectPool<mysqlx::Session>* objPool;
     std::string dbName;
     std::string tableName;
     const std::string primaryKeyName;
 
 public:
     VarNodeRepository(
-        mysqlx::Session* const _session
+        // mysqlx::Session* const _session
+        ObjectPool<mysqlx::Session>* _objPool
         , const std::string&   _db
         , const std::string&   _table
         , const std::string&   _primaryKeyName = "id"
     )
-    : session{_session}, dbName{_db}, tableName{_table}, primaryKeyName{_primaryKeyName}
+    : objPool{_objPool}, dbName{_db}, tableName{_table}, primaryKeyName{_primaryKeyName}
     {}
 
-    ID insert(tmp::VarNode&& data) const override
-    {
-        int status;
-        print_debug("insert ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
-        std::vector<std::string> cols;
-        for(size_t i=0; i < data.children.size(); i++) {
-            cols.push_back(data.children[i]->key);
-        }
-        std::vector<mysqlx::Value> vals = convertVarNodeToSqlValues(data);
-        mysqlx::Schema db{session->getSchema(dbName)};
-        mysqlx::Table table{db.getTable(tableName)};
-        mysqlx::Result res = table.insert(cols)
-                .values(vals)
-                .execute();
-        // 上記で Insert されたレコード件数
-        print_debug("affected items count: ", res.getAffectedItemsCount());
-        return res.getAutoIncrementValue();
+ID insert(tmp::VarNode&& data) const override
+{
+    // ObjectPool からコネクション（セッション）を借りる
+    // ConnectionGuard がスコープの終わりに自動的にプールへ返却する
+    ObjectPool<mysqlx::Session>::ConnectionGuard session_guard = objPool->pop();
+    mysqlx::Session& session = *session_guard.get();
+
+    int status;
+    // session_guard を使用しているため、abi::__cxa_demangle の出力も調整が必要かもしれないが、
+    // ひとまず元のロジックを維持
+    print_debug("insert ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
+    
+    std::vector<std::string> cols;
+    for(size_t i=0; i < data.children.size(); i++) {
+        cols.push_back(data.children[i]->key);
     }
+    
+    // この外部依存関数は、VarNode のデータから SQL の Value オブジェクトの vector を生成する
+    std::vector<mysqlx::Value> vals = convertVarNodeToSqlValues(data);
+    
+    // 借りたセッションを使用してデータベース操作を実行
+    mysqlx::Schema db{session.getSchema(dbName)};
+    mysqlx::Table table{db.getTable(tableName)};
+    mysqlx::Result res = table.insert(cols)
+            .values(vals)
+            .execute();
+    
+    // 上記で Insert されたレコード件数
+    print_debug("affected items count: ", res.getAffectedItemsCount());
+    return res.getAutoIncrementValue();
+    // ここで session_guard のデストラクタが呼ばれ、コネクションがプールに戻る
+}
 
     // findByIdの実装
     std::optional<tmp::VarNode> findById(const ID& id) const override
     {
-        mysqlx::Schema db{session->getSchema(dbName)};
+        // ObjectPool からコネクション（セッション）を借りる
+        // ConnectionGuard がスコープの終わりに自動的にプールへ返却する
+        ObjectPool<mysqlx::Session>::ConnectionGuard session_guard = objPool->pop();
+        // セッションへの参照を取得し、以降のコードで 'session' 変数を使用できるようにする
+        mysqlx::Session& session = *session_guard.get(); 
+
+        // 以前の 'session->' 依存箇所は 'session.' に変更する必要がある
+        // または、ポインタアクセスを維持するために以下のように調整する
+        // mysqlx::Session* session_ptr = session_guard.get();
+        
+        // ここからは元のロジックを維持
+        mysqlx::Schema db{session.getSchema(dbName)};
         mysqlx::Table table{db.getTable(tableName)};
         std::string condition = primaryKeyName + " = :id";
         mysqlx::RowResult rows = table.select()
@@ -285,7 +313,8 @@ public:
         // Columns オブジェクトを参照で受け取る (size() 等は使えない)
         const auto& meta = rows.getColumns();
         
-        VarNode result_entity("result_row", std::monostate{});
+        // VarNode は tmp::VarNode を想定
+        tmp::VarNode result_entity("result_row", std::monostate{});
         // インデックスではなく、範囲ベース for ループとカウンタを併用する
         size_t i = 0;
         for (const auto& col_meta : meta) {
@@ -293,223 +322,234 @@ public:
             // 行オブジェクトからはインデックスで値を取得する
             mysqlx::Value db_value = row.get(i);
             // 正しい変換関数を使用
+            // ValueType は tmp::VarNode::ValueType を想定
             ValueType variant_value = convertSqlValueToVarNode_Corrected(db_value);
             result_entity.addChild(col_name, variant_value);
             i++;
         }
         return result_entity;
+        // ここで session_guard のデストラクタが呼ばれ、コネクションがプールに戻る
     }
 
     void update(const ID& id, tmp::VarNode&& data) const override
     {
+        // ObjectPool からコネクション（セッション）を借りる (RAIIガード)
+        ObjectPool<mysqlx::Session>::ConnectionGuard session_guard = objPool->pop();
+        mysqlx::Session& session = *session_guard.get(); 
+
         int status;
         print_debug("update ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
-        mysqlx::Schema db{session->getSchema(dbName)};
+        
+        // 借りたセッションを使用してデータベース操作を実行
+        mysqlx::Schema db{session.getSchema(dbName)};
         mysqlx::Table table{db.getTable(tableName)};
         // 1. まず update ステートメントを開始する
         auto tableUpdate = table.update();
 
         // 2. VarNode の子ノード（更新対象カラム）をループ処理し、動的に set() を呼び出す
         for (const auto& child : data.children) {
-            // child->key がカラム名
-            // child->data が更新する値 (ValueType)
-            // std::visit を使用して ValueType の中身を取り出し、mysqlx::Value に変換してセットする
+            // ... (visit のロジックは変更なし) ...
             std::visit([&](auto&& arg) {
                 using T = std::decay_t<decltype(arg)>;
                 if constexpr (!std::is_same_v<T, std::monostate>) {
-                    // mysqlx::Value のコンストラクタが arg の型を適切に処理する
                     mysqlx::Value sql_val(arg);
-                    // set(カラム名, 値)
                     tableUpdate.set(child->key, sql_val);
                 }
-                // monostate の場合は更新しない（NULLをセットしたい場合は別途ロジックが必要）
             }, child->data);
         }
         // 3. WHERE句を設定して実行する
-        // primaryKeyName はコンストラクタで受け取ったメンバ変数
         std::string condition = primaryKeyName + " = :id";
         mysqlx::Result res = tableUpdate.where(condition)
                                         .bind("id", id)
                                         .execute();
         print_debug("affected items count: ", res.getAffectedItemsCount());
+        
+        // ここで session_guard のデストラクタが呼ばれ、コネクションがプールに戻る
     }
     virtual void remove(const ID& id) const override
     {
+        // ObjectPool からコネクション（セッション）を借りる (RAIIガード)
+        ObjectPool<mysqlx::Session>::ConnectionGuard session_guard = objPool->pop();
+        mysqlx::Session& session = *session_guard.get(); 
+
         int status;
         print_debug("remove ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
-        mysqlx::Schema db{session->getSchema(dbName)};
+        
+        // 借りたセッションを使用してデータベース操作を実行
+        mysqlx::Schema db{session.getSchema(dbName)};
         mysqlx::Table table{db.getTable(tableName)};
         std::string condition = primaryKeyName + " = :id";
         mysqlx::Result res = table.remove()
                             .where(condition)
                             .bind("id", id)
                             .execute();
-        print_debug("affected items count: ", res.getAffectedItemsCount());
+        print_debug("affected items count: ", res.getAffectedItemsCount());        
+        // ここで session_guard のデストラクタが呼ばれ、コネクションがプールに戻る
 	}
 };
 
 }   // namespace tmp::mysql::r3
 
 
-int test_VarNodeRepository_Remove(uint64_t* id)
-{
-    puts("------ test_VarNodeRepository_Remove");
-    using Data = tmp::VarNode;
-    std::clock_t start_1 = clock();
-    mysqlx::Session sess("localhost", 33060, "root", "root1234");
-    try {
-        std::clock_t start_2 = clock();
-        std::unique_ptr<tmp::Repository<uint64_t, Data>> irepo
-            = std::make_unique<tmp::mysql::r3::VarNodeRepository<uint64_t>>(&sess, "test", "contractor", "id");
+// int test_VarNodeRepository_Remove(uint64_t* id)
+// {
+//     puts("------ test_VarNodeRepository_Remove");
+//     using Data = tmp::VarNode;
+//     std::clock_t start_1 = clock();
+//     mysqlx::Session sess("localhost", 33060, "root", "root1234");
+//     try {
+//         std::clock_t start_2 = clock();
+//         std::unique_ptr<tmp::Repository<uint64_t, Data>> irepo
+//             = std::make_unique<tmp::mysql::r3::VarNodeRepository<uint64_t>>(&sess, "test", "contractor", "id");
 
-        sess.startTransaction();
-        irepo->remove(*id);
-        sess.commit();
-        std::clock_t end = clock();
-        std::cout << "passed " << (double)(end-start_1)/CLOCKS_PER_SEC << " sec." << std::endl;
-        std::cout << "passed " << (double)(end-start_2)/CLOCKS_PER_SEC << " sec." << std::endl;
-        return EXIT_SUCCESS;
-    } catch(std::exception& e) {
-        sess.rollback();
-        tmp::ptr_print_error<decltype(e)&>(e);
-        return EXIT_FAILURE;
-    }
-}
+//         sess.startTransaction();
+//         irepo->remove(*id);
+//         sess.commit();
+//         std::clock_t end = clock();
+//         std::cout << "passed " << (double)(end-start_1)/CLOCKS_PER_SEC << " sec." << std::endl;
+//         std::cout << "passed " << (double)(end-start_2)/CLOCKS_PER_SEC << " sec." << std::endl;
+//         return EXIT_SUCCESS;
+//     } catch(std::exception& e) {
+//         sess.rollback();
+//         tmp::ptr_print_error<decltype(e)&>(e);
+//         return EXIT_FAILURE;
+//     }
+// }
 
-int test_VarNodeRepository_Update(uint64_t* id)
-{
-    puts("------ test_VarNodeRepository_Update");
-    using Data = tmp::VarNode;
-    std::clock_t start_1 = clock();
-    mysqlx::Session sess("localhost", 33060, "root", "root1234");
-    try {
-        std::clock_t start_2 = clock();
-        std::unique_ptr<tmp::Repository<uint64_t, Data>> irepo
-            = std::make_unique<tmp::mysql::r3::VarNodeRepository<uint64_t>>(&sess, "test", "contractor", "id");
+// int test_VarNodeRepository_Update(uint64_t* id)
+// {
+//     puts("------ test_VarNodeRepository_Update");
+//     using Data = tmp::VarNode;
+//     std::clock_t start_1 = clock();
+//     mysqlx::Session sess("localhost", 33060, "root", "root1234");
+//     try {
+//         std::clock_t start_2 = clock();
+//         std::unique_ptr<tmp::Repository<uint64_t, Data>> irepo
+//             = std::make_unique<tmp::mysql::r3::VarNodeRepository<uint64_t>>(&sess, "test", "contractor", "id");
 
-        // e.g. Data sample
-        // Data data{"B3_3333", "foo@loki.org", "foo1111", "Foo", roles};
-        // ポリシの問題だが、更新時は別途、仮引数で値を渡しているため、ここでの設定はいらない（プライマリキの更新は不可が正しい）。
-        // データベース上でNULL を許可しているカラムは設定しなくてよい（contractor table では roles にあたる）。
-        // root ノードのKey とValue は空でなければ何でもよい（現状は）。
-        std::string pkcol{"id"};
-        Data root{"primaryKey", pkcol};
-        std::string companyId{"B3_3333"};
-        root.addChild("company_id", companyId);
-        std::string email{"foo@loki.org"};
-        root.addChild("email", email);
-        std::string password{"foo1111"};
-        root.addChild("password", password);
-        std::string name{"Foo"};
-        root.addChild("name", name);
-        std::string roles{"Admin,User"};
-        root.addChild("roles", roles);
-        sess.startTransaction();
-        irepo->update(*id, std::move(root));
-        sess.commit();
-        std::clock_t end = clock();
-        std::cout << "passed " << (double)(end-start_1)/CLOCKS_PER_SEC << " sec." << std::endl;
-        std::cout << "passed " << (double)(end-start_2)/CLOCKS_PER_SEC << " sec." << std::endl;
-        return EXIT_SUCCESS;
-    } catch(std::exception& e) {
-        sess.rollback();
-        tmp::ptr_print_error<decltype(e)&>(e);
-        return EXIT_FAILURE;
-    }
-}
+//         // e.g. Data sample
+//         // Data data{"B3_3333", "foo@loki.org", "foo1111", "Foo", roles};
+//         // ポリシの問題だが、更新時は別途、仮引数で値を渡しているため、ここでの設定はいらない（プライマリキの更新は不可が正しい）。
+//         // データベース上でNULL を許可しているカラムは設定しなくてよい（contractor table では roles にあたる）。
+//         // root ノードのKey とValue は空でなければ何でもよい（現状は）。
+//         std::string pkcol{"id"};
+//         Data root{"primaryKey", pkcol};
+//         std::string companyId{"B3_3333"};
+//         root.addChild("company_id", companyId);
+//         std::string email{"foo@loki.org"};
+//         root.addChild("email", email);
+//         std::string password{"foo1111"};
+//         root.addChild("password", password);
+//         std::string name{"Foo"};
+//         root.addChild("name", name);
+//         std::string roles{"Admin,User"};
+//         root.addChild("roles", roles);
+//         sess.startTransaction();
+//         irepo->update(*id, std::move(root));
+//         sess.commit();
+//         std::clock_t end = clock();
+//         std::cout << "passed " << (double)(end-start_1)/CLOCKS_PER_SEC << " sec." << std::endl;
+//         std::cout << "passed " << (double)(end-start_2)/CLOCKS_PER_SEC << " sec." << std::endl;
+//         return EXIT_SUCCESS;
+//     } catch(std::exception& e) {
+//         sess.rollback();
+//         tmp::ptr_print_error<decltype(e)&>(e);
+//         return EXIT_FAILURE;
+//     }
+// }
 
-int test_VarNodeRepository_FindById(uint64_t* id)
-{
-    puts("------ test_VarNodeRepository_FindById");
-    using Data = tmp::VarNode;
-    std::clock_t start_1 = clock();
-    mysqlx::Session sess("localhost", 33060, "root", "root1234");
-    try {
-        std::clock_t start_2 = clock();
-        std::unique_ptr<tmp::Repository<uint64_t, Data>> irepo
-            = std::make_unique<tmp::mysql::r3::VarNodeRepository<uint64_t>>(&sess, "test", "contractor");
+// int test_VarNodeRepository_FindById(uint64_t* id)
+// {
+//     puts("------ test_VarNodeRepository_FindById");
+//     using Data = tmp::VarNode;
+//     std::clock_t start_1 = clock();
+//     mysqlx::Session sess("localhost", 33060, "root", "root1234");
+//     try {
+//         std::clock_t start_2 = clock();
+//         std::unique_ptr<tmp::Repository<uint64_t, Data>> irepo
+//             = std::make_unique<tmp::mysql::r3::VarNodeRepository<uint64_t>>(&sess, "test", "contractor");
 
-        sess.startTransaction();
-        std::optional<Data> resultVNode = irepo->findById(*id);
-        sess.commit();
-        std::clock_t end = clock();
-        if(resultVNode) Data::debug(&(resultVNode.value()));
-        else throw std::runtime_error("test_VarNodeRepository_FindById() is failed.");
-        std::cout << "passed " << (double)(end-start_1)/CLOCKS_PER_SEC << " sec." << std::endl;
-        std::cout << "passed " << (double)(end-start_2)/CLOCKS_PER_SEC << " sec." << std::endl;
-        return EXIT_SUCCESS;
-    } catch(std::exception& e) {
-        sess.rollback();
-        tmp::ptr_print_error<decltype(e)&>(e);
-        return EXIT_FAILURE;
-    }
-}
+//         sess.startTransaction();
+//         std::optional<Data> resultVNode = irepo->findById(*id);
+//         sess.commit();
+//         std::clock_t end = clock();
+//         if(resultVNode) Data::debug(&(resultVNode.value()));
+//         else throw std::runtime_error("test_VarNodeRepository_FindById() is failed.");
+//         std::cout << "passed " << (double)(end-start_1)/CLOCKS_PER_SEC << " sec." << std::endl;
+//         std::cout << "passed " << (double)(end-start_2)/CLOCKS_PER_SEC << " sec." << std::endl;
+//         return EXIT_SUCCESS;
+//     } catch(std::exception& e) {
+//         sess.rollback();
+//         tmp::ptr_print_error<decltype(e)&>(e);
+//         return EXIT_FAILURE;
+//     }
+// }
 
-int test_VarNodeRepository_Insert(uint64_t* id)
-{
-    puts("------ test_VarNodeRepository_Insert");
-    using Data = tmp::VarNode;
-    std::clock_t start_1 = clock();
-    mysqlx::Session sess("localhost", 33060, "root", "root1234");
-    try {
-        std::clock_t start_2 = clock();
-        std::unique_ptr<tmp::Repository<uint64_t, Data>> irepo
-            = std::make_unique<tmp::mysql::r3::VarNodeRepository<uint64_t>>(&sess, "test", "contractor");
+// int test_VarNodeRepository_Insert(uint64_t* id)
+// {
+//     puts("------ test_VarNodeRepository_Insert");
+//     using Data = tmp::VarNode;
+//     std::clock_t start_1 = clock();
+//     mysqlx::Session sess("localhost", 33060, "root", "root1234");
+//     try {
+//         std::clock_t start_2 = clock();
+//         std::unique_ptr<tmp::Repository<uint64_t, Data>> irepo
+//             = std::make_unique<tmp::mysql::r3::VarNodeRepository<uint64_t>>(&sess, "test", "contractor");
 
-        // e.g. Data sample
-        // Data data{0, "B3_1000", "alice@loki.org", "alice1111", "Alice", std::nullopt};
-        // 
-        // Data の作り方にひと工夫必要なはず。
-        // primaryKey is xxx という情報が最低限必要（VarNoderepository のコンストラクタの仮引数として解決した：）
-        // データベース上でNULL を許可しているカラムは設定しなくてよい（contractor table では roles にあたる）。
-        // root ノードのKey とValue は空でなければ何でもよい（現状は）。
-        std::string pkcol{"id"};
-        Data root{"primaryKey", pkcol};
-        std::string companyId{"B3_1000"};
-        root.addChild("company_id", companyId);
-        std::string email{"alice@loki.org"};
-        root.addChild("email", email);
-        std::string password{"alice1111"};
-        root.addChild("password", password);
-        std::string name{"Alice"};
-        root.addChild("name", name);
-        sess.startTransaction();
-        *id = irepo->insert(std::move(root));
-        sess.commit();
-        std::clock_t end = clock();
-        tmp::print_debug("id: ", *id);
-        std::cout << "passed " << (double)(end-start_1)/CLOCKS_PER_SEC << " sec." << std::endl;
-        std::cout << "passed " << (double)(end-start_2)/CLOCKS_PER_SEC << " sec." << std::endl;
-        return EXIT_SUCCESS;
-    } catch(std::exception& e) {
-        sess.rollback();
-        tmp::ptr_print_error<decltype(e)&>(e);
-        return EXIT_FAILURE;
-    }
-}
+//         // e.g. Data sample
+//         // Data data{0, "B3_1000", "alice@loki.org", "alice1111", "Alice", std::nullopt};
+//         // 
+//         // Data の作り方にひと工夫必要なはず。
+//         // primaryKey is xxx という情報が最低限必要（VarNoderepository のコンストラクタの仮引数として解決した：）
+//         // データベース上でNULL を許可しているカラムは設定しなくてよい（contractor table では roles にあたる）。
+//         // root ノードのKey とValue は空でなければ何でもよい（現状は）。
+//         std::string pkcol{"id"};
+//         Data root{"primaryKey", pkcol};
+//         std::string companyId{"B3_1000"};
+//         root.addChild("company_id", companyId);
+//         std::string email{"alice@loki.org"};
+//         root.addChild("email", email);
+//         std::string password{"alice1111"};
+//         root.addChild("password", password);
+//         std::string name{"Alice"};
+//         root.addChild("name", name);
+//         sess.startTransaction();
+//         *id = irepo->insert(std::move(root));
+//         sess.commit();
+//         std::clock_t end = clock();
+//         tmp::print_debug("id: ", *id);
+//         std::cout << "passed " << (double)(end-start_1)/CLOCKS_PER_SEC << " sec." << std::endl;
+//         std::cout << "passed " << (double)(end-start_2)/CLOCKS_PER_SEC << " sec." << std::endl;
+//         return EXIT_SUCCESS;
+//     } catch(std::exception& e) {
+//         sess.rollback();
+//         tmp::ptr_print_error<decltype(e)&>(e);
+//         return EXIT_FAILURE;
+//     }
+// }
 
-int test_GenericRepository()
-{
-    puts("------ test_GenericRepository");
-    // using namespace tmp::mysql::r2;
-    // using Repo = tmp::mysql::r2::GenericRepository;
-    using Data = tmp::mysql::r2::Contractor;
-    mysqlx::Session sess("localhost", 33060, "root", "root1234");
-    try {
-        std::unique_ptr<tmp::Repository<uint64_t, Data>> irepo
-            = std::make_unique<tmp::mysql::r2::GenericRepository<uint64_t, Data>>(&sess, "test", "contractor");
-        Data data{0, "B3_1000", "alice@loki.org", "alice1111", "Alice", std::nullopt};
-        sess.startTransaction();
-        uint64_t id = irepo->insert(std::move(data));
-        sess.commit();
-        tmp::print_debug("id: ", id);
-        return EXIT_SUCCESS;
-    } catch(std::exception& e) {
-        sess.rollback();
-        tmp::ptr_print_error<decltype(e)&>(e);
-        return EXIT_FAILURE;
-    }
-}
+// int test_GenericRepository()
+// {
+//     puts("------ test_GenericRepository");
+//     // using namespace tmp::mysql::r2;
+//     // using Repo = tmp::mysql::r2::GenericRepository;
+//     using Data = tmp::mysql::r2::Contractor;
+//     mysqlx::Session sess("localhost", 33060, "root", "root1234");
+//     try {
+//         std::unique_ptr<tmp::Repository<uint64_t, Data>> irepo
+//             = std::make_unique<tmp::mysql::r2::GenericRepository<uint64_t, Data>>(&sess, "test", "contractor");
+//         Data data{0, "B3_1000", "alice@loki.org", "alice1111", "Alice", std::nullopt};
+//         sess.startTransaction();
+//         uint64_t id = irepo->insert(std::move(data));
+//         sess.commit();
+//         tmp::print_debug("id: ", id);
+//         return EXIT_SUCCESS;
+//     } catch(std::exception& e) {
+//         sess.rollback();
+//         tmp::ptr_print_error<decltype(e)&>(e);
+//         return EXIT_FAILURE;
+//     }
+// }
 
 // int main()
 // {

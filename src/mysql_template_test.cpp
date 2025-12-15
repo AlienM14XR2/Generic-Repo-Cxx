@@ -52,47 +52,53 @@ tmp::VarNode create_test_var_node(
     return root;
 }
 
-// フィクスチャでセッションを管理する
+
 class MySqlRepositoryTest : public ::testing::Test
 {
 protected:
+    // ObjectPool の型定義を簡略化
+    using SessionPool = ObjectPool<mysqlx::Session>;
+
     void SetUp() override {
-        // !!! ここをあなたの正しい接続情報に修正してください !!!
-        // 手動テストログより推測される情報を使用
+        // プールをヒープに構築（シングルトン的な管理を想定するならここに）
+        // テストケースごとにプールを作り直す単純な例
+        pool.reset(new SessionPool("TestPoolCredit"));
+        // プール初期化のための接続情報
         const std::string conn_string = "root:root1234@127.0.0.1:33060/test";
 
         try {
-            sess.reset(new mysqlx::Session(conn_string));
+            mysqlx::Session* sess = new mysqlx::Session(conn_string);
             sess->startTransaction();
-            ASSERT_NE(sess.get(), nullptr) << "DB session failed in SetUp (session is null).";
+            std::unique_ptr<mysqlx::Session> initial_session(sess);
+            ASSERT_NE(initial_session.get(), nullptr) << "Initial DB session creation failed.";
+            pool->push(std::move(initial_session));
 
         } catch (const mysqlx::Error &e) {
-            FAIL() << "DB接続またはトランザクション開始に失敗しました: " << e.what();
+            FAIL() << "DB接続またはプール初期化に失敗しました: " << e.what();
         }
     }
 
     void TearDown() override {
-        // isOpen() メンバは存在しないためチェックを削除
-        if (sess) { 
-            sess->rollback(); // テストデータはDBに残さない
-        }
+        // unique_ptr のデストラクタが呼ばれ、プールとその中身（セッション）が破棄される
+        pool.reset(); 
     }
 
-    std::unique_ptr<mysqlx::Session> sess;
+    // プールマネージャーの unique_ptr を保持
+    std::unique_ptr<SessionPool> pool; 
+    
     const std::string TEST_SCHEMA = "test";
     const std::string TEST_TABLE = "contractor";
     const std::string TEST_PK = "id";
 };
-
 // --- TEST_F マクロを使用したテストケース ---
 
 TEST_F(MySqlRepositoryTest, InsertAndFindById)
 {
     std::clock_t start_1 = clock();
     // 1. テスト対象のリポジトリをインスタンス化
-    // sess.get() で mysqlx::Session* のポインタを渡す
+    // Done... ObjectPool にする必要がある。
     tmp::mysql::r3::VarNodeRepository<unsigned long> repo(
-        sess.get(), TEST_SCHEMA, TEST_TABLE, TEST_PK // 4引数で呼び出す
+        pool.get(), TEST_SCHEMA, TEST_TABLE, TEST_PK // 4引数で呼び出す
     );
 
     // 2. 挿入する VarNode データを準備
@@ -123,9 +129,9 @@ TEST_F(MySqlRepositoryTest, InsertAndFindById)
 TEST_F(MySqlRepositoryTest, Insert_Update_FindById)
 {
     // 1. テスト対象のリポジトリをインスタンス化
-    // sess.get() で mysqlx::Session* のポインタを渡す
+    // Done... ObjectPool にする必要がある。
     tmp::mysql::r3::VarNodeRepository<unsigned long> repo(
-        sess.get(), TEST_SCHEMA, TEST_TABLE, TEST_PK // 4引数で呼び出す
+        pool.get(), TEST_SCHEMA, TEST_TABLE, TEST_PK // 4引数で呼び出す
     );
 
     // 2. 挿入する VarNode データを準備
@@ -177,9 +183,9 @@ TEST_F(MySqlRepositoryTest, Insert_Update_FindById)
 TEST_F(MySqlRepositoryTest, Insert_Remove_FindById)
 {
     // 1. テスト対象のリポジトリをインスタンス化
-    // sess.get() で mysqlx::Session* のポインタを渡す
+    // Done... ObjectPool にする必要がある。
     tmp::mysql::r3::VarNodeRepository<unsigned long> repo(
-        sess.get(), TEST_SCHEMA, TEST_TABLE, TEST_PK // 4引数で呼び出す
+        pool.get(), TEST_SCHEMA, TEST_TABLE, TEST_PK // 4引数で呼び出す
     );
 
     // 2. 挿入する VarNode データを準備
