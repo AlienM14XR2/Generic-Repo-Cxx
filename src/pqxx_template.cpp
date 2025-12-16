@@ -217,7 +217,7 @@ public:
     )
     : tx{_tx}, tableName{_table}, idSeqName{_idseq}, mapper{std::move(_mapper)}, primaryKeyName{_primaryKeyName}
     {}
-    virtual ID insert(tmp::VarNode&& data) const override
+    ID insert(tmp::VarNode&& data) override
     {
         int status;
         print_debug("insert ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
@@ -237,7 +237,7 @@ public:
         print_debug("affected rows: ", result.affected_rows());
         return id;
     }
-    virtual void update(const ID& id, tmp::VarNode&& data) const override
+    void update(const ID& id, tmp::VarNode&& data) override
     {
         int status;
         print_debug("update ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
@@ -254,7 +254,7 @@ public:
         pqxx::result result = tx->exec(builder.makePrepped(), params);
         print_debug("affected rows: ", result.affected_rows());
     }
-    virtual void remove(const ID& id) const override
+    void remove(const ID& id) override
     {
         int status;
         print_debug("remove ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
@@ -265,7 +265,7 @@ public:
         pqxx::result result = tx->exec(builder.makePrepped(), builder.makeParams(id));
         print_debug("affected rows: ", result.affected_rows());
     }
-    virtual std::optional<tmp::VarNode> findById(const ID& id) const override
+    std::optional<tmp::VarNode> findById(const ID& id) const override
     {
         int status;
         print_debug("findById ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));

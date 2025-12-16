@@ -58,9 +58,9 @@ template <class ID, class Data>
 class Repository {
 public:
     virtual ~Repository() = default;
-    virtual ID insert(Data&&) const = 0;
-    virtual void update(const ID&, Data&&) const = 0;
-    virtual void remove(const ID&) const = 0;
+    virtual ID insert(Data&&) = 0;
+    virtual void update(const ID&, Data&&) = 0;
+    virtual void remove(const ID&) = 0;
     virtual std::optional<Data> findById(const ID&) const = 0;
 };
 
@@ -106,6 +106,7 @@ struct VarNode
         children.push_back(std::make_unique<VarNode>(_key, _data, this));
         return children.back().get();
     }
+    // この戻値に const 修飾は設定してならない。
     VarNode* getChild(const std::string& _key)
     {
         // C++20 であれば std::ranges::find_if が使えます
@@ -161,24 +162,24 @@ struct VarNode
 #endif  // static void debug()
     }
 };  // VarNode
-template <typename T>
-std::unique_ptr<T> get_value_safely(const VarNode* const node)
-{
-    if (node == nullptr) {
-        // node 自体が nullptr の場合は runtime_error を投げる
-        throw std::runtime_error("VarNode* node is null.");
-    }
-    // std::get_if<T>(&node->data) が、VarNodeTypeFixer の役割を果たす
-    // - T 型が格納されていれば T* を返す
-    // - T 型でなければ nullptr を返す
-    if (const T* value_ptr = std::get_if<T>(&node->data)) {
-        // 値が見つかったので、unique_ptr でラップして返す
-        return std::make_unique<T>(*value_ptr);
-    } else {
-        // 型が一致しない場合は nullptr を返す
-        return nullptr;
-    }
-}
+// template <typename T>
+// std::unique_ptr<T> get_value_safely(const VarNode* const node)
+// {
+//     if (node == nullptr) {
+//         // node 自体が nullptr の場合は runtime_error を投げる
+//         throw std::runtime_error("VarNode* node is null.");
+//     }
+//     // std::get_if<T>(&node->data) が、VarNodeTypeFixer の役割を果たす
+//     // - T 型が格納されていれば T* を返す
+//     // - T 型でなければ nullptr を返す
+//     if (const T* value_ptr = std::get_if<T>(&node->data)) {
+//         // 値が見つかったので、unique_ptr でラップして返す
+//         return std::make_unique<T>(*value_ptr);
+//     } else {
+//         // 型が一致しない場合は nullptr を返す
+//         return nullptr;
+//     }
+// }
 
 template <typename T>
 std::optional<T> get_value_safely_optional(const VarNode* const node)
@@ -191,6 +192,31 @@ std::optional<T> get_value_safely_optional(const VarNode* const node)
     } else {
         return std::nullopt; // 値がないことを示す
     }
+}
+
+void debug_print_varnode(const VarNode* const _node, std::ostream& os = std::cout, int indent = 0)
+{
+#ifdef DEBUG
+    if (_node == nullptr) {
+        os << "node is nil." << std::endl;
+        return;
+    }
+    // インデント表示
+    os << std::string(indent * 2, ' ');
+    os << "key: " << _node->key << "\tdata: ";
+
+    // std::visit を使った実装はそのまま利用
+    std::visit([&os](auto&& arg) { // os をキャプチャ
+        // ... (std::visit の中身は現状維持) ...
+    }, _node->data);
+    
+    os << std::endl;
+
+    // 子要素を再帰的に呼び出す
+    for (const auto& child : _node->children) {
+        debug_print_varnode(child.get(), os, indent + 1); // os を渡す
+    }
+#endif
 }
 
 // Type Erasure パターンを利用したリポジトリの設計。
