@@ -32,7 +32,8 @@
 #include "gtest/gtest.h"
 #include <mysqlx/xdevapi.h> // X Dev API のヘッダー
 // あなたの環境に合わせて正しいパスを指定してください
-#include "mysql_template.cpp" 
+// #include "mysql_template.cpp" // AI が一番最初に指定した方法、本来はヘッダファイルであるべきもの
+#include <mysql_template.hpp>
 
 tmp::VarNode create_test_var_node(
     const std::string& company_id,

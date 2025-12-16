@@ -231,7 +231,8 @@ tmp::ValueType convertSqlValueToVarNode_Corrected(const mysqlx::Value& sql_val) 
 }
 
 template <class ID>
-class VarNodeRepository : public tmp::Repository<ID, tmp::VarNode> {
+class VarNodeRepository : public tmp::Repository<ID, tmp::VarNode>
+{
 private:
     mysqlx::Session* const session;
     std::string dbName;
@@ -350,7 +351,7 @@ public:
         print_debug("affected items count: ", res.getAffectedItemsCount());        
         // ここで session_guard のデストラクタが呼ばれ、コネクションがプールに戻る
 	}
-};
+};  // VarNodeRepository
 
 };   // namespace tmp::mysql::r3
 

@@ -389,7 +389,8 @@ int test_VarNodeRepository_Find(uint64_t* id)
         conn.close();
         if(result) {
             // check...
-            Data::debug(&(result.value()));
+            // Data::debug(&(result.value()));
+            tmp::debug_print_varnode(&(result.value()));
         } else {
             throw std::runtime_error("UnExpects Data.");
         }

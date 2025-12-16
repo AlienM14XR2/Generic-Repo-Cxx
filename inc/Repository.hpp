@@ -119,67 +119,8 @@ struct VarNode
         }
         return nullptr; // 見つからなかった場合は nullptr を返す
     }
-    // debug関数は std::visit を使うと大幅に簡潔化できる
-    static void debug([[maybe_unused]] const VarNode* const _node, [[maybe_unused]] int indent = 0)
-    {
-#ifdef DEBUG
-        if (_node == nullptr) {
-            std::cerr << "node is nil." << std::endl;
-            return;
-        }
-        // インデント表示
-        std::cout << std::string(indent * 2, ' ');
-        std::cout << "key: " << _node->key << "\tdata: ";
-
-        // std::visit のラムダ式内で、全ての型を明示的に処理する
-        std::visit([](auto&& arg) {
-            using T = std::decay_t<decltype(arg)>;
-
-            if constexpr (std::is_same_v<T, std::monostate>) {
-                std::cout << "(null)";
-            } else if constexpr (std::is_same_v<T, bool>) {
-                std::cout << (arg ? "true" : "false");
-            } else if constexpr (std::is_same_v<T, int64_t> || 
-                                 std::is_same_v<T, uint64_t> ||
-                                 std::is_same_v<T, float> ||
-                                 std::is_same_v<T, double> ||
-                                 std::is_same_v<T, std::string>) {
-                // std::cout はこれらのプリミティブ型やstd::stringを安全に出力できる
-                std::cout << arg;
-            } else {
-                // 将来ValueTypeに新しい型（例えばカスタムオブジェクトやポインタ）が追加された場合
-                // コンパイルエラーにならずに、ここで処理を止めるか、汎用的な出力を行う
-                std::cout << "(Unknown/Unhandled Type)";
-            }
-        }, _node->data);
-        
-        std::cout << std::endl;
-
-        // 子要素を再帰的に呼び出す
-        for (const auto& child : _node->children) {
-            debug(child.get(), indent + 1);
-        }
-#endif  // static void debug()
-    }
+    
 };  // VarNode
-// template <typename T>
-// std::unique_ptr<T> get_value_safely(const VarNode* const node)
-// {
-//     if (node == nullptr) {
-//         // node 自体が nullptr の場合は runtime_error を投げる
-//         throw std::runtime_error("VarNode* node is null.");
-//     }
-//     // std::get_if<T>(&node->data) が、VarNodeTypeFixer の役割を果たす
-//     // - T 型が格納されていれば T* を返す
-//     // - T 型でなければ nullptr を返す
-//     if (const T* value_ptr = std::get_if<T>(&node->data)) {
-//         // 値が見つかったので、unique_ptr でラップして返す
-//         return std::make_unique<T>(*value_ptr);
-//     } else {
-//         // 型が一致しない場合は nullptr を返す
-//         return nullptr;
-//     }
-// }
 
 template <typename T>
 std::optional<T> get_value_safely_optional(const VarNode* const node)

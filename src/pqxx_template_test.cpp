@@ -28,7 +28,8 @@ find /usr/local/lib -name 'libgtest.a' 2>/dev/null
 #include "gtest/gtest.h"
 #include <pqxx/pqxx>
 // あなたの環境に合わせて正しいパスを指定してください
-#include "pqxx_template.cpp" 
+// #include "pqxx_template.cpp"    // AI が最初に指定した方法、本来はヘッダファイルであるべきもの。
+#include <pqxx_template.hpp>
 
 tmp::VarNode create_test_var_node(
     const std::string& company_id,
