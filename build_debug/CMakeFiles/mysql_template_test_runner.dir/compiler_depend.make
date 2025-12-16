@@ -3,7 +3,7 @@
 
 CMakeFiles/mysql_template_test_runner.dir/src/mysql_template_test.cpp.o: /home/jack/dev2/Paradise-Lost/C++/2025/generic_repo_cxx/src/mysql_template_test.cpp \
   /home/jack/dev2/Paradise-Lost/C++/2025/generic_repo_cxx/inc/Repository.hpp \
-  /home/jack/dev2/Paradise-Lost/C++/2025/generic_repo_cxx/src/mysql_template.cpp \
+  /home/jack/dev2/Paradise-Lost/C++/2025/generic_repo_cxx/inc/mysql_template.hpp \
   /usr/include/alloca.h \
   /usr/include/asm-generic/bitsperlong.h \
   /usr/include/asm-generic/errno-base.h \
@@ -770,6 +770,8 @@ CMakeFiles/mysql_template_test_runner.dir/src/mysql_template_test.cpp.o: /home/j
 
 /usr/include/c++/13/bits/shared_ptr.h:
 
+/home/jack/dev2/Paradise-Lost/C++/2025/generic_repo_cxx/inc/mysql_template.hpp:
+
 /usr/include/c++/13/bits/semaphore_base.h:
 
 /usr/include/x86_64-linux-gnu/bits/thread-shared-types.h:
@@ -861,6 +863,10 @@ CMakeFiles/mysql_template_test_runner.dir/src/mysql_template_test.cpp.o: /home/j
 /usr/include/c++/13/bits/locale_facets.h:
 
 /usr/include/c++/13/cxxabi.h:
+
+/usr/include/x86_64-linux-gnu/bits/waitstatus.h:
+
+/usr/include/c++/13/bits/exception_defines.h:
 
 /usr/include/c++/13/bits/atomic_lockfree_defines.h:
 
@@ -964,6 +970,12 @@ CMakeFiles/mysql_template_test_runner.dir/src/mysql_template_test.cpp.o: /home/j
 
 /usr/include/c++/13/bits/basic_string.tcc:
 
+/usr/include/c++/13/bits/stringfwd.h:
+
+/usr/include/c++/13/bits/iterator_concepts.h:
+
+/home/jack/dev2/Paradise-Lost/C++/2025/generic_repo_cxx/inc/Repository.hpp:
+
 /usr/include/c++/13/bits/ranges_cmp.h:
 
 /usr/include/asm-generic/int-ll64.h:
@@ -973,18 +985,6 @@ CMakeFiles/mysql_template_test_runner.dir/src/mysql_template_test.cpp.o: /home/j
 /usr/include/c++/13/set:
 
 /usr/include/c++/13/bits/deque.tcc:
-
-/usr/include/x86_64-linux-gnu/bits/waitstatus.h:
-
-/usr/include/c++/13/bits/exception_defines.h:
-
-/usr/include/c++/13/bits/stringfwd.h:
-
-/home/jack/dev2/Paradise-Lost/C++/2025/generic_repo_cxx/inc/Repository.hpp:
-
-/usr/include/c++/13/bits/iterator_concepts.h:
-
-/home/jack/dev2/Paradise-Lost/C++/2025/generic_repo_cxx/src/mysql_template.cpp:
 
 /usr/include/c++/13/cctype:
 

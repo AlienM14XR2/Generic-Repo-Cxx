@@ -119,7 +119,7 @@ struct VarNode
         }
         return nullptr; // 見つからなかった場合は nullptr を返す
     }
-    
+
 };  // VarNode
 
 template <typename T>
@@ -137,7 +137,6 @@ std::optional<T> get_value_safely_optional(const VarNode* const node)
 
 void debug_print_varnode(const VarNode* const _node, std::ostream& os = std::cout, int indent = 0)
 {
-#ifdef DEBUG
     if (_node == nullptr) {
         os << "node is nil." << std::endl;
         return;
@@ -157,7 +156,6 @@ void debug_print_varnode(const VarNode* const _node, std::ostream& os = std::cou
     for (const auto& child : _node->children) {
         debug_print_varnode(child.get(), os, indent + 1); // os を渡す
     }
-#endif
 }
 
 // Type Erasure パターンを利用したリポジトリの設計。
