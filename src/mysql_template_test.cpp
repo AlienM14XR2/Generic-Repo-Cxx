@@ -52,11 +52,12 @@ tmp::VarNode create_test_var_node(
     return root;
 }
 
-// フィクスチャでセッションを管理する
+
 class MySqlRepositoryTest : public ::testing::Test
 {
 protected:
-    void SetUp() override {
+    void SetUp() override 
+    {
         // !!! ここをあなたの正しい接続情報に修正してください !!!
         // 手動テストログより推測される情報を使用
         const std::string conn_string = "root:root1234@127.0.0.1:33060/test";
@@ -72,25 +73,24 @@ protected:
     }
 
     void TearDown() override {
-        // isOpen() メンバは存在しないためチェックを削除
         if (sess) { 
             sess->rollback(); // テストデータはDBに残さない
         }
     }
 
-    std::unique_ptr<mysqlx::Session> sess;
+    // プールマネージャーの unique_ptr を保持
+    std::unique_ptr<mysqlx::Session> sess; 
     const std::string TEST_SCHEMA = "test";
     const std::string TEST_TABLE = "contractor";
     const std::string TEST_PK = "id";
 };
-
 // --- TEST_F マクロを使用したテストケース ---
 
 TEST_F(MySqlRepositoryTest, InsertAndFindById)
 {
     std::clock_t start_1 = clock();
     // 1. テスト対象のリポジトリをインスタンス化
-    // sess.get() で mysqlx::Session* のポインタを渡す
+    // Done... ObjectPool にする必要がある。
     tmp::mysql::r3::VarNodeRepository<unsigned long> repo(
         sess.get(), TEST_SCHEMA, TEST_TABLE, TEST_PK // 4引数で呼び出す
     );
@@ -123,7 +123,7 @@ TEST_F(MySqlRepositoryTest, InsertAndFindById)
 TEST_F(MySqlRepositoryTest, Insert_Update_FindById)
 {
     // 1. テスト対象のリポジトリをインスタンス化
-    // sess.get() で mysqlx::Session* のポインタを渡す
+    // Done... ObjectPool にする必要がある。
     tmp::mysql::r3::VarNodeRepository<unsigned long> repo(
         sess.get(), TEST_SCHEMA, TEST_TABLE, TEST_PK // 4引数で呼び出す
     );
@@ -177,7 +177,6 @@ TEST_F(MySqlRepositoryTest, Insert_Update_FindById)
 TEST_F(MySqlRepositoryTest, Insert_Remove_FindById)
 {
     // 1. テスト対象のリポジトリをインスタンス化
-    // sess.get() で mysqlx::Session* のポインタを渡す
     tmp::mysql::r3::VarNodeRepository<unsigned long> repo(
         sess.get(), TEST_SCHEMA, TEST_TABLE, TEST_PK // 4引数で呼び出す
     );
