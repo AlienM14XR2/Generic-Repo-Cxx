@@ -224,7 +224,7 @@ public:
         ID id = tx->query_value<ID>(SqlBuilder::nextvalSql(idSeqName));
         print_debug("nextval: ", id);
         // 悩ましい問題だが、id（プラマリキ）はリポジトリ内部で値が決定され、data 上の値を更新するものとする。
-        auto pkeyNode = data.getChild(primaryKeyName);
+        const auto pkeyNode = data.getChild(primaryKeyName);
         if(pkeyNode) pkeyNode->data = id;
         else throw std::runtime_error("primary key node is not found.");
         // DONE... 動的なSQL の発行が必要。
