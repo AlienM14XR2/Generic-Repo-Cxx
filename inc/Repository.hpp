@@ -175,7 +175,7 @@ void debug_print_varnode(const VarNode* const _node, std::ostream& os = std::cou
             // コンパイルエラーにならずに、ここで処理を止めるか、汎用的な出力を行う
             os << "(Unknown/Unhandled Type)";
         }
-    }, _node->data);        
+    }, _node->data);
     os << std::endl;
 
     // 子要素を再帰的に呼び出す
