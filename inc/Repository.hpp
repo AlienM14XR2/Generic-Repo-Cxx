@@ -147,36 +147,36 @@ std::optional<T> get_value_safely_optional(const VarNode* const node)
 void debug_print_varnode(const VarNode* const _node, std::ostream& os = std::cout, int indent = 0)
 {
     if (_node == nullptr) {
-        std::cerr << "node is nil." << std::endl;
+        os << "node is nil." << std::endl;
         return;
     }
     // インデント表示
-    std::cout << std::string(indent * 2, ' ');
-    std::cout << "key: " << _node->key << "\tdata: ";
+    os << std::string(indent * 2, ' ');
+    os << "key: " << _node->key << "\tdata: ";
 
     // std::visit のラムダ式内で、全ての型を明示的に処理する
-    std::visit([](auto&& arg) {
-    using T = std::decay_t<decltype(arg)>;
-    if constexpr (std::is_same_v<T, std::monostate>) {
-        std::cout << "(null)";
-    // この分岐は冗長に思うかもしれないが、現状はキープする
-    } else if constexpr (std::is_same_v<T, bool>) {
-        std::cout << (arg ? "true" : "false");
-    // この分岐は冗長に思うかもしれないが、現状はキープする
-    } else if constexpr (std::is_same_v<T, int64_t> || 
-                         std::is_same_v<T, uint64_t> ||
-                         std::is_same_v<T, float> ||
-                         std::is_same_v<T, double> ||
-                         std::is_same_v<T, std::string>) {
-        // std::cout はこれらのプリミティブ型やstd::stringを安全に出力できる
-        std::cout << arg;
-    } else {
-        // 将来ValueTypeに新しい型（例えばカスタムオブジェクトやポインタ）が追加された場合
-        // コンパイルエラーにならずに、ここで処理を止めるか、汎用的な出力を行う
-        std::cout << "(Unknown/Unhandled Type)";
-    }
+    std::visit([&](auto&& arg) {
+        using T = std::decay_t<decltype(arg)>;
+        if constexpr (std::is_same_v<T, std::monostate>) {
+            os << "(null)";
+        // この分岐は冗長に思うかもしれないが、現状はキープする
+        } else if constexpr (std::is_same_v<T, bool>) {
+            os << (arg ? "true" : "false");
+        // この分岐は冗長に思うかもしれないが、現状はキープする
+        } else if constexpr (std::is_same_v<T, int64_t> || 
+                            std::is_same_v<T, uint64_t> ||
+                            std::is_same_v<T, float> ||
+                            std::is_same_v<T, double> ||
+                            std::is_same_v<T, std::string>) {
+            // std::cout はこれらのプリミティブ型やstd::stringを安全に出力できる
+            os << arg;
+        } else {
+            // 将来ValueTypeに新しい型（例えばカスタムオブジェクトやポインタ）が追加された場合
+            // コンパイルエラーにならずに、ここで処理を止めるか、汎用的な出力を行う
+            os << "(Unknown/Unhandled Type)";
+        }
     }, _node->data);        
-    std::cout << std::endl;
+    os << std::endl;
 
     // 子要素を再帰的に呼び出す
     for (const auto& child : _node->children) {
