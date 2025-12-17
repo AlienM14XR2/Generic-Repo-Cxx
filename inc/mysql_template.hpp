@@ -20,7 +20,7 @@
  * 似通ったリポジトリは減らせるが、エンティティは無くせない。
  * 
  * e.g. compile
- * g++ -O3 -std=c++20 -DDEBUG -pedantic-errors -Wall -Werror -I../inc/ -I/usr/include/mysql-cppconn/ -L/usr/lib/x86_64-linux-gnu/ mysql_template.cpp -lmysqlcppconn -lmysqlcppconnx -o ../bin/mysql_template
+ * g++ -O3 -std=c++20 -DDEBUG -pedantic-errors -Wall -Wextra -Werror -I../inc/ -I/usr/include/mysql-cppconn/ -L/usr/lib/x86_64-linux-gnu/ mysql_template.cpp -lmysqlcppconn -lmysqlcppconnx -o ../bin/mysql_template
  */
 #include <iostream>
 #include <memory>

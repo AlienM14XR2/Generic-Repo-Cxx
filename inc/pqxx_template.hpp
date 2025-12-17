@@ -11,7 +11,7 @@
  * 楽がしたい：）では進めてみよう。
  * 
  * e.g. compile
- * g++ -O3 -DDEBUG -std=c++20 -pedantic-errors -Wall -Werror -I../inc -I/usr/local/include -I/usr/include/postgresql -L/usr/local/lib pqxx_template.cpp -lpqxx -lpq -o ../bin/pqxx_template
+ * g++ -O3 -DDEBUG -std=c++20 -pedantic-errors -Wall -Wextra -Werror -I../inc -I/usr/local/include -I/usr/include/postgresql -L/usr/local/lib pqxx_template.cpp -lpqxx -lpq -o ../bin/pqxx_template
  */
 #include <iostream>
 #include <memory>
