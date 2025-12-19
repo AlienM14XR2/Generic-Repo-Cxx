@@ -120,4 +120,5 @@ set(CMAKE_DEPEND_INFO_FILES
   "CMakeFiles/pqxx_template_test_runner.dir/DependInfo.cmake"
   "CMakeFiles/mysql_template_test_runner.dir/DependInfo.cmake"
   "CMakeFiles/mongo_template_test_runner.dir/DependInfo.cmake"
+  "CMakeFiles/object_pool_test_runner.dir/DependInfo.cmake"
   )

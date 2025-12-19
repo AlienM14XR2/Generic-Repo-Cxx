@@ -155,6 +155,19 @@ mongo_template_test_runner/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/mongo_template_test_runner.dir/build.make CMakeFiles/mongo_template_test_runner.dir/build
 .PHONY : mongo_template_test_runner/fast
 
+#=============================================================================
+# Target rules for targets named object_pool_test_runner
+
+# Build rule for target.
+object_pool_test_runner: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 object_pool_test_runner
+.PHONY : object_pool_test_runner
+
+# fast build rule for target.
+object_pool_test_runner/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/object_pool_test_runner.dir/build.make CMakeFiles/object_pool_test_runner.dir/build
+.PHONY : object_pool_test_runner/fast
+
 src/mongo_template_test.o: src/mongo_template_test.cpp.o
 .PHONY : src/mongo_template_test.o
 
@@ -203,6 +216,30 @@ src/mysql_template_test.cpp.s:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/mysql_template_test_runner.dir/build.make CMakeFiles/mysql_template_test_runner.dir/src/mysql_template_test.cpp.s
 .PHONY : src/mysql_template_test.cpp.s
 
+src/object_pool_test.o: src/object_pool_test.cpp.o
+.PHONY : src/object_pool_test.o
+
+# target to build an object file
+src/object_pool_test.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/object_pool_test_runner.dir/build.make CMakeFiles/object_pool_test_runner.dir/src/object_pool_test.cpp.o
+.PHONY : src/object_pool_test.cpp.o
+
+src/object_pool_test.i: src/object_pool_test.cpp.i
+.PHONY : src/object_pool_test.i
+
+# target to preprocess a source file
+src/object_pool_test.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/object_pool_test_runner.dir/build.make CMakeFiles/object_pool_test_runner.dir/src/object_pool_test.cpp.i
+.PHONY : src/object_pool_test.cpp.i
+
+src/object_pool_test.s: src/object_pool_test.cpp.s
+.PHONY : src/object_pool_test.s
+
+# target to generate assembly for a file
+src/object_pool_test.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/object_pool_test_runner.dir/build.make CMakeFiles/object_pool_test_runner.dir/src/object_pool_test.cpp.s
+.PHONY : src/object_pool_test.cpp.s
+
 src/pqxx_template_test.o: src/pqxx_template_test.cpp.o
 .PHONY : src/pqxx_template_test.o
 
@@ -237,6 +274,7 @@ help:
 	@echo "... rebuild_cache"
 	@echo "... mongo_template_test_runner"
 	@echo "... mysql_template_test_runner"
+	@echo "... object_pool_test_runner"
 	@echo "... pqxx_template_test_runner"
 	@echo "... src/mongo_template_test.o"
 	@echo "... src/mongo_template_test.i"
@@ -244,6 +282,9 @@ help:
 	@echo "... src/mysql_template_test.o"
 	@echo "... src/mysql_template_test.i"
 	@echo "... src/mysql_template_test.s"
+	@echo "... src/object_pool_test.o"
+	@echo "... src/object_pool_test.i"
+	@echo "... src/object_pool_test.s"
 	@echo "... src/pqxx_template_test.o"
 	@echo "... src/pqxx_template_test.i"
 	@echo "... src/pqxx_template_test.s"
