@@ -129,6 +129,53 @@ public:
     }
 };
 
+/**
+ * ServiceExecutor を受け取り、トランザクション境界を提供するラップ関数
+ * 
+ */
+void execute_service_with_tx(Transaction& tx, ServiceExecutor& service) {
+    try {
+        tx.begin();
+        service.execute();
+        tx.commit();
+    } catch (const std::exception& e) {
+        tx.rollback();
+        tmp::ptr_print_error<decltype(e)&>(e);
+        throw;
+    } catch (...) {
+        tx.rollback();
+        tmp::print_debug("Transaction failed due to unknown error.");
+        throw;
+    }
+}
+
+int test_execute_service_with_tx_M1()
+{
+    // Poolオブジェクトの作成
+    auto pool = ObjectPool<mysqlx::Session>::create("mysql");
+    // コネクション（セッション）をひとつPool に確保。
+    pool->push(std::make_unique<mysqlx::Session>(mysqlx::Session("localhost", 33060, "root", "root1234")));
+    // Poolから取り出す
+    auto sess = pool->pop();
+    MySqlTransaction tx(sess.get());
+    try {
+        tmp::mysql::r3::VarNodeRepository<uint64_t> insert_repo{sess.get(), "test", "contractor"};
+        tmp::mysql::r3::VarNodeRepository<uint64_t> update_repo{sess.get(), "test", "contractor"};
+        tmp::mysql::r3::VarNodeRepository<uint64_t> find_repo{sess.get(), "test", "contractor"};
+        tmp::mysql::r3::VarNodeRepository<uint64_t> remove_repo{sess.get(), "test", "contractor"};
+        MyBusinessService service(std::move(insert_repo), std::move(update_repo), std::move(find_repo), std::move(remove_repo));
+        execute_service_with_tx(tx, service);
+        // tx.begin();
+        // service.execute();
+        // tx.commit();
+        return EXIT_SUCCESS;
+    } catch(std::exception& e) {
+        // tx.rollback();
+        tmp::ptr_print_error<decltype(e)&>(e);
+        return EXIT_FAILURE;
+    }
+}
+
 int test_MyBusinessService_M1()
 {
     // 疑似的な確認... Tx の手動操作。
@@ -381,6 +428,8 @@ int main()
     }
     if(1) {
         tmp::print_debug("Play and Result ... ", ret = test_MyBusinessService_M1());
+        assert(ret == 0);
+        tmp::print_debug("Play and Result ... ", ret = test_execute_service_with_tx_M1());
         assert(ret == 0);
     }
     puts("=== END main ");
