@@ -63,6 +63,9 @@ public:
         tmp::print_debug("tx rollback ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
         tx->rollback();
     }
+    // コピー禁止
+    MySqlTransaction(const MySqlTransaction&) = delete;
+    MySqlTransaction& operator=(const MySqlTransaction&) = delete;
 };
 
 using Data = tmp::VarNode;
@@ -80,48 +83,39 @@ struct UpdateOp
     UpdateOp(const ID& _id, Data* const _data): id{_id}, data{_data}
     {}
 };
+struct FindByIdOp
+{
+    ID id;
+    FindByIdOp(const ID& _id): id{_id}
+    {}
+};
+struct RemoveOp
+{
+    ID id;
+    RemoveOp(const ID& _id): id{_id}
+    {}
+};
 class RepoExecutor {
 private:
-    tmp::Repository<ID, Data>* repo;
+    tmp::Repository<ID, Data>* const repo;
 public:
-    RepoExecutor(tmp::Repository<ID, Data>* _repo): repo{_repo}
+    RepoExecutor(tmp::Repository<ID, Data>*  const _repo): repo{_repo}
     {}
     // 戻り値を包括するため、共通の Result 型を定義するか、std::any 等を利用
-    auto operator()(InsertOp& op) { return repo->insert(std::move(*op.data)); }
-    auto operator()(UpdateOp& op) { repo->update(op.id, std::move(*op.data)); }
+    auto operator()(InsertOp& op) { return repo->insert(std::move(*(op.data))); }
+    void operator()(UpdateOp& op) { repo->update(op.id, std::move(*(op.data))); }
+    auto operator()(FindByIdOp& op) { return repo->findById(op.id); }
+    void operator()(RemoveOp& op) { repo->remove(op.id); }
     // ...
 };
 
-/**
- * 次のイメージを実装する。
- * 
-// セッションは一旦先にに取得Repositry を作る。
-auto session = pool->pop(); // ObjectPoolから取得
-// このセッションを利用して次のTx を作る。
-MySqlTransaction tx(session.get());
-using TransactionFunc = std::function<ValueType(RepoExecutor&)>;
-// 概念的な実装イメージ
-// template<typename Func>
-auto execute_transaction(Transaction& tx, TransactionFunc&& func, RepoExecutor& repo_exec) {
-	std::variant ret{std::monostate, int64_t, tmp::VarNode};    
-    try {
-        tx.begin();
-        ret = func(repo_exec); // ビジネスロジックの実行
-        tx.commit();
-        return ret;
-    } catch (...) {
-        tx.rollback();
-        throw; // 例外を再送出し、呼び出し側に通知
-    }
-}
- */
-
+// TODO ... 次の課題、RepoExecutor& を template <class... Repos> として複数の任意のリポジトリ実行ができるのか検証する。
+// Tx ラッピング関数。Insert の実行。
 auto execute_transaction(Transaction& tx, RepoExecutor& repoExec, InsertOp& op) {
     try {
         tx.begin();
         auto ret = repoExec(op); // ビジネスロジックの実行
         tx.commit();
-        // if(ret != std::monostate) return static_cast<std::int64_t>(ret);
         return ret;
     } catch (...) {
         tx.rollback();
@@ -129,9 +123,45 @@ auto execute_transaction(Transaction& tx, RepoExecutor& repoExec, InsertOp& op) 
     }
 }
 
-int test_RepoExecutor()
+// Tx ラッピング関数。Update の実行。
+void execute_transaction(Transaction& tx, RepoExecutor& repoExec, UpdateOp& op) {
+    try {
+        tx.begin();
+        repoExec(op);
+        tx.commit();
+    } catch (...) {
+        tx.rollback();
+        throw;
+    }
+}
+
+// Tx ラッピング関数。FindById の実行（find はトランザクションをはる必要は本来ないが、他と合わせている）。
+auto execute_transaction(Transaction& tx, RepoExecutor& repoExec, FindByIdOp& op) {
+    try {
+        tx.begin();
+        auto ret = repoExec(op);
+        tx.commit();
+        return ret;
+    } catch (...) {
+        tx.rollback();
+        throw;
+    }
+}
+// Tx ラッピング関数。Remove の実行。
+void execute_transaction(Transaction& tx, RepoExecutor& repoExec, RemoveOp& op) {
+    try {
+        tx.begin();
+        repoExec(op);
+        tx.commit();
+    } catch (...) {
+        tx.rollback();
+        throw;
+    }
+}
+
+int test_RepoExecutor_Insert(uint64_t* id)
 {
-    puts("------ test_RepoExecutor");
+    puts("------ test_RepoExecutor_Insert");
     // ObjectPool のインスタンス化
     auto pool = ObjectPool<mysqlx::Session>::create("mysql");
     try {
@@ -155,9 +185,93 @@ int test_RepoExecutor()
 
         RepoExecutor exec{irepo.get()};
         InsertOp op{&root};
-        uint64_t id = execute_transaction(tx, exec, op);
-        tmp::print_debug("id: ", id);
-        if(!id) throw std::runtime_error("Unexpected case.");
+        *id = execute_transaction(tx, exec, op);
+        tmp::print_debug("id: ", *id);
+        if(!(*id)) throw std::runtime_error("Unexpected case.");
+        return EXIT_SUCCESS;
+    } catch(std::exception& e) {
+        tmp::ptr_print_error<decltype(e)&>(e);
+        return EXIT_FAILURE;
+    }
+}
+
+int test_RepoExecutor_Update(uint64_t* id)
+{
+    puts("------ test_RepoExecutor_Update");
+    // ObjectPool のインスタンス化
+    auto pool = ObjectPool<mysqlx::Session>::create("mysql");
+    try {
+        pool->push(std::make_unique<mysqlx::Session>(mysqlx::Session("localhost", 33060, "root", "root1234")));
+        auto sess = pool->pop();
+        MySqlTransaction tx(sess.get());
+        std::unique_ptr<tmp::Repository<uint64_t, Data>> irepo
+            = std::make_unique<tmp::mysql::r3::VarNodeRepository<uint64_t>>(sess.get(), "test", "contractor");
+        // データベース上でNULL を許可しているカラムは設定しなくてよい（contractor table では roles にあたる）。
+        // root ノードのKey とValue は空でなければ何でもよい（現状は）。
+        std::string pkcol{"id"};
+        Data root{"primaryKey", pkcol};
+        std::string companyId{"B3_3333"};
+        root.addChild("company_id", companyId);
+        std::string email{"alice_uloki.org"};
+        root.addChild("email", email);
+        std::string password{"alice3333"};
+        root.addChild("password", password);
+        std::string name{"Alice_U"};
+        root.addChild("name", name);
+        std::string role{"Admin,User"};
+        root.addChild("roles", role);
+
+        RepoExecutor exec{irepo.get()};
+        UpdateOp op{*id, &root};
+        execute_transaction(tx, exec, op);
+        return EXIT_SUCCESS;
+    } catch(std::exception& e) {
+        tmp::ptr_print_error<decltype(e)&>(e);
+        return EXIT_FAILURE;
+    }
+}
+
+int test_RepoExecutor_FindById(uint64_t* id)
+{
+    puts("------ test_RepoExecutor_FindById");
+    // ObjectPool のインスタンス化
+    auto pool = ObjectPool<mysqlx::Session>::create("mysql");
+    try {
+        pool->push(std::make_unique<mysqlx::Session>(mysqlx::Session("localhost", 33060, "root", "root1234")));
+        auto sess = pool->pop();
+        MySqlTransaction tx(sess.get());
+        std::unique_ptr<tmp::Repository<uint64_t, Data>> irepo
+            = std::make_unique<tmp::mysql::r3::VarNodeRepository<uint64_t>>(sess.get(), "test", "contractor");
+
+        tmp::print_debug("id: ", *id);
+        RepoExecutor exec{irepo.get()};
+        FindByIdOp op{*id};
+        std::optional<Data> node = execute_transaction(tx, exec, op);
+        if(!node) throw std::runtime_error("Unexpected case.");
+        else tmp::debug_print_varnode(&node.value());
+        return EXIT_SUCCESS;
+    } catch(std::exception& e) {
+        tmp::ptr_print_error<decltype(e)&>(e);
+        return EXIT_FAILURE;
+    }
+}
+
+int test_RepoExecutor_Remove(uint64_t* id)
+{
+    puts("------ test_RepoExecutor_Remove");
+    // ObjectPool のインスタンス化
+    auto pool = ObjectPool<mysqlx::Session>::create("mysql");
+    try {
+        pool->push(std::make_unique<mysqlx::Session>(mysqlx::Session("localhost", 33060, "root", "root1234")));
+        auto sess = pool->pop();
+        MySqlTransaction tx(sess.get());
+        std::unique_ptr<tmp::Repository<uint64_t, Data>> irepo
+            = std::make_unique<tmp::mysql::r3::VarNodeRepository<uint64_t>>(sess.get(), "test", "contractor");
+
+        tmp::print_debug("id: ", *id);
+        RepoExecutor exec{irepo.get()};
+        RemoveOp op{*id};
+        execute_transaction(tx, exec, op);
         return EXIT_SUCCESS;
     } catch(std::exception& e) {
         tmp::ptr_print_error<decltype(e)&>(e);
@@ -170,7 +284,14 @@ int main()
     puts("START main ===");
     int ret = -1;
     if(1) {
-        tmp::print_debug("Play and Result ... ", ret = test_RepoExecutor());
+        uint64_t id = 0;
+        tmp::print_debug("Play and Result ... ", ret = test_RepoExecutor_Insert(&id));
+        assert(ret == 0);
+        tmp::print_debug("Play and Result ... ", ret = test_RepoExecutor_Update(&id));
+        assert(ret == 0);
+        tmp::print_debug("Play and Result ... ", ret = test_RepoExecutor_FindById(&id));
+        assert(ret == 0);
+        tmp::print_debug("Play and Result ... ", ret = test_RepoExecutor_Remove(&id));
         assert(ret == 0);
     }
     puts("=== END main ");
