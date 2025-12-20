@@ -68,6 +68,91 @@ public:
     MySqlTransaction& operator=(const MySqlTransaction&) = delete;
 };
 
+// サービス基底クラス（またはインターフェース）
+class ServiceExecutor {
+public:
+    virtual ~ServiceExecutor() = default;
+    virtual void execute() = 0;
+};
+
+// ユーザーが実装する具体的なサービス
+// template<typename... Repos>
+// concept AllRepos = (tmp::mysql::r3::VarNodeRepository<std::uint64_t><Repos> && ...);
+// template<AllRepos... Args>
+template<typename... Repos>
+class MyBusinessService : public ServiceExecutor {
+    using Data = tmp::VarNode;
+private:
+    std::tuple<Repos...> repos; // 複数のリポジトリを保持
+
+public:
+    // 可変引数でリポジトリを受け取る
+    explicit MyBusinessService(Repos&&... args) : repos(args...) {}
+
+    void execute() override {
+        // 1. リポジトリの取り出し
+        // 2. 複数のリポジトリを「串刺し」にしたビジネスロジック
+        // 例: std::get<0>(repos)->insert(...);
+        // Insert
+        std::string pkcol{"id"};
+        Data root{"primaryKey", pkcol};
+        std::string companyId{"B3_1000"};
+        root.addChild("company_id", companyId);
+        std::string email{"alice@loki.org"};
+        root.addChild("email", email);
+        std::string password{"alice1111"};
+        root.addChild("password", password);
+        std::string name{"Alice"};
+        root.addChild("name", name);
+        int64_t id = static_cast<tmp::mysql::r3::VarNodeRepository<uint64_t>>(std::get<0>(repos)).insert(std::move(root));
+        tmp::print_debug("id: ", id);
+        // Update
+        std::string pkcol_u{"id"};
+        Data updateData{"primaryKey", pkcol_u};
+        std::string companyId_u{"B3_3333"};
+        updateData.addChild("company_id", companyId_u);
+        std::string email_u{"alice_uloki.org"};
+        updateData.addChild("email", email_u);
+        std::string password_u{"alice3333"};
+        updateData.addChild("password", password_u);
+        std::string name_u{"Alice_U"};
+        updateData.addChild("name", name_u);
+        std::string role_u{"Admin,User"};
+        updateData.addChild("roles", role_u);
+        static_cast<tmp::mysql::r3::VarNodeRepository<uint64_t>>(std::get<1>(repos)).update(id, std::move(updateData));
+        // Find
+        std::optional<Data> fnode = static_cast<tmp::mysql::r3::VarNodeRepository<uint64_t>>(std::get<2>(repos)).findById(id);
+        if(!fnode) throw std::runtime_error("Unexpected case.");
+        else tmp::debug_print_varnode(&(fnode.value()));
+        // Remove
+        static_cast<tmp::mysql::r3::VarNodeRepository<uint64_t>>(std::get<3>(repos)).remove(id);
+    }
+};
+
+int test_MyBusinessService_M1()
+{
+    // 疑似的な確認... Tx の手動操作。
+    auto pool = ObjectPool<mysqlx::Session>::create("mysql");
+    pool->push(std::make_unique<mysqlx::Session>(mysqlx::Session("localhost", 33060, "root", "root1234")));
+    auto sess = pool->pop();
+    MySqlTransaction tx(sess.get());
+    try {
+        tmp::mysql::r3::VarNodeRepository<uint64_t> insert_repo{sess.get(), "test", "contractor"};
+        tmp::mysql::r3::VarNodeRepository<uint64_t> update_repo{sess.get(), "test", "contractor"};
+        tmp::mysql::r3::VarNodeRepository<uint64_t> find_repo{sess.get(), "test", "contractor"};
+        tmp::mysql::r3::VarNodeRepository<uint64_t> remove_repo{sess.get(), "test", "contractor"};
+        MyBusinessService service(std::move(insert_repo), std::move(update_repo), std::move(find_repo), std::move(remove_repo));
+        tx.begin();
+        service.execute();
+        tx.commit();
+        return EXIT_SUCCESS;
+    } catch(std::exception& e) {
+        tx.rollback();
+        tmp::ptr_print_error<decltype(e)&>(e);
+        return EXIT_FAILURE;
+    }
+}
+
 using Data = tmp::VarNode;
 using ID = uint64_t;
 struct InsertOp
@@ -283,7 +368,7 @@ int main()
 {
     puts("START main ===");
     int ret = -1;
-    if(1) {
+    if(0) {
         uint64_t id = 0;
         tmp::print_debug("Play and Result ... ", ret = test_RepoExecutor_Insert(&id));
         assert(ret == 0);
@@ -292,6 +377,10 @@ int main()
         tmp::print_debug("Play and Result ... ", ret = test_RepoExecutor_FindById(&id));
         assert(ret == 0);
         tmp::print_debug("Play and Result ... ", ret = test_RepoExecutor_Remove(&id));
+        assert(ret == 0);
+    }
+    if(1) {
+        tmp::print_debug("Play and Result ... ", ret = test_MyBusinessService_M1());
         assert(ret == 0);
     }
     puts("=== END main ");
