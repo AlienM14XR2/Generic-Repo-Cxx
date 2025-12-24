@@ -88,6 +88,7 @@
 #include <memory>
 #include <vector>
 #include <map>
+#include <list>
 #include <string>
 #include <cxxabi.h>
 #include <cassert>
@@ -271,7 +272,9 @@ std::vector<mysqlx::Value> convertVarNodeToSqlValues(const tmp::VarNode& data_tr
 }
 
 // `convertVarNodeToSqlValues` の逆を行うヘルパー関数
-tmp::ValueType convertSqlValueToVarNode_Corrected(const mysqlx::Value& sql_val) {
+tmp::ValueType convertSqlValueToVarNode_Corrected(const mysqlx::Value& sql_val)
+{
+    tmp::print_debug("sql_val.getType(): ", sql_val.getType());
     using Type = mysqlx::abi2::r0::Value::Type;
     switch (sql_val.getType()) {
         case Type::VNULL:
@@ -287,11 +290,107 @@ tmp::ValueType convertSqlValueToVarNode_Corrected(const mysqlx::Value& sql_val) 
         case Type::BOOL:
             return sql_val.get<bool>();
         case Type::STRING:
-            return std::string{sql_val.get<mysqlx::string>()};
+            return static_cast<std::string>(sql_val.get<mysqlx::string>());
+        // case Type::RAW: {    // 以下はDatetime のRaw データの変換方法
+        //     const auto raw = sql_val.getRawBytes(); // first: const byte*, second: size_t
+        //     auto ptr = reinterpret_cast<const uint8_t*>(raw.first);
+        //     auto end = ptr + raw.second;
+        //     auto decode_varint = [&](auto& p) {
+        //         uint64_t val = 0;
+        //         int shift = 0;
+        //         while (p < end) {
+        //             uint8_t b = *p++;
+        //             val |= static_cast<uint64_t>(b & 0x7F) << shift;
+        //             if (!(b & 0x80)) break;
+        //             shift += 7;
+        //         }
+        //         return val;
+        //     };
+        //     // 順次デコード
+        //     uint64_t year = decode_varint(ptr);
+        //     uint64_t month = (ptr < end) ? decode_varint(ptr) : 1;
+        //     uint64_t day = (ptr < end) ? decode_varint(ptr) : 1;
+        //     uint64_t hour = (ptr < end) ? decode_varint(ptr) : 0;
+        //     uint64_t min = (ptr < end) ? decode_varint(ptr) : 0;
+        //     uint64_t sec = (ptr < end) ? decode_varint(ptr) : 0;
+        //     // フォーマットして std::string に変換
+        //     char buf[32];
+        //     snprintf(buf, sizeof(buf), "%04u-%02u-%02u %02u:%02u:%02u", 
+        //             (unsigned)year, (unsigned)month, (unsigned)day, 
+        //             (unsigned)hour, (unsigned)min, (unsigned)sec);
+        //     return std::string(buf);
+        // }
         default:
+            tmp::print_debug("sql_val.getType(): ", sql_val.getType());
             throw std::runtime_error("Unsupported mysqlx::Value type encountered.");
     }
 }
+
+class SqlFindHelper final {
+private:
+    mysqlx::Session* const session;
+    const std::string dbName;
+    const std::string tableName;
+public:
+    SqlFindHelper(mysqlx::Session* const _session, const std::string& _dbName, const std::string& _tableName)
+    : session{_session}, dbName{_dbName}, tableName{_tableName}
+    {}
+    std::list<std::string> selectStr(const std::vector<std::string>& cols) const
+    {
+        size_t i = 0;
+        std::list<std::string> results;
+        for(const auto& col: cols) {
+            std::string select;
+            select.append(col);
+            results.push_back(select);
+            ++i;
+        }
+        return results;
+    }
+    std::vector<std::string> buildSelectFields(const std::vector<std::pair<std::string, std::string>>& columnTypes) const
+    {
+        std::vector<std::string> fields;
+        for (const auto& [colName, dataType] : columnTypes) {
+            if (dataType == "datetime" || dataType == "timestamp" || dataType == "date") {
+                // 自動的に CAST を適用
+                fields.push_back("CAST(" + colName + " AS CHAR) AS " + colName);
+            } else {
+                fields.push_back(colName);
+            }
+        }
+        return fields;
+    }
+    std::vector<std::pair<std::string, std::string>> fetchTableMetadata()
+    {
+        std::vector<std::pair<std::string, std::string>> tableStructure;
+        session->sql("USE "+dbName).execute();
+        mysqlx::RowResult res = session->sql("DESC " + tableName).execute();
+        for( mysqlx::Row row: res ) {
+            // 0番目が Field (カラム名), 1番目が Type (データ型)
+            const mysqlx::abi2::r0::Value fieldName = row.get(0);
+            const mysqlx::abi2::r0::Value typeName  = row.get(1);
+            // デバッグ出力
+            tmp::print_debug("Field: ", fieldName, " | Type: ", typeName);
+            tableStructure.push_back({static_cast<std::string>(fieldName), static_cast<std::string>(typeName)});
+        }
+        return tableStructure;
+    }
+    // std::map<std::string, std::string> fetchTableMetadata()
+    // {
+    //     std::map<std::string, std::string> columnTypeMap;
+    //     // INFORMATION_SCHEMA を検索して型情報を取得
+    //     auto res = session->sql("SELECT COLUMN_NAME, DATA_TYPE "
+    //                             "FROM INFORMATION_SCHEMA.COLUMNS "
+    //                             "WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?"
+    //                         )
+    //                     .bind(dbName).bind(tableName).execute();
+    //     mysqlx::Row row;
+    //     while ((row = res.fetchOne())) {
+    //         columnTypeMap[row[0].get<std::string>()] = row[1].get<std::string>();
+    //     }
+    //     return columnTypeMap;
+    // }
+};
 
 template <class ID>
 class VarNodeRepository : public tmp::Repository<ID, tmp::VarNode>
@@ -315,7 +414,7 @@ public:
     ID insert(tmp::VarNode&& data) override
     {
         int status;
-        print_debug("insert ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
+        tmp::print_debug("insert ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
         std::vector<std::string> cols;
         for(size_t i=0; i < data.children.size(); i++) {
             cols.push_back(data.children[i]->key);
@@ -327,7 +426,7 @@ public:
                 .values(vals)
                 .execute();
         // 上記で Insert されたレコード件数
-        print_debug("affected items count: ", res.getAffectedItemsCount());
+        tmp::print_debug("affected items count: ", res.getAffectedItemsCount());
         return res.getAutoIncrementValue();
     }
     
@@ -335,29 +434,35 @@ public:
     std::optional<tmp::VarNode> findById(const ID& id) const override
     {
         int status;
-        print_debug("findById ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
+        tmp::print_debug("findById ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
+        SqlFindHelper findHelper{session, dbName, tableName};
+        std::list<std::string> select_string = findHelper.selectStr(findHelper.buildSelectFields(findHelper.fetchTableMetadata()));
         // ここからは元のロジックを維持
         mysqlx::Schema db{session->getSchema(dbName)};
         mysqlx::Table table{db.getTable(tableName)};
         std::string condition = primaryKeyName + " = :id";
-        mysqlx::RowResult rows = table.select()
+        // std::string query = "SELECT " + select_string + " FROM " + tableName + " WHERE " + condition;
+        // mysqlx::RowResult rows = session->sql(query).bind("id", id).execute();
+        mysqlx::RowResult rows = table.select(select_string)
                                       .where(condition)
                                       .bind("id", id)
                                       .execute();
         
+        tmp::print_debug("rows count: ", rows.count());
         if (rows.count() == 0) {
             return std::nullopt;
         }
         mysqlx::Row row = rows.fetchOne();
         // Columns オブジェクトを参照で受け取る (size() 等は使えない)
         const auto& meta = rows.getColumns();
-        
         // VarNode は tmp::VarNode を想定
         tmp::VarNode result_entity("result_row", std::monostate{});
         // インデックスではなく、範囲ベース for ループとカウンタを併用する
         size_t i = 0;
         for (const auto& col_meta : meta) {
-            const std::string& col_name = col_meta.getColumnName();
+            // const std::string& col_name = col_meta.getColumnName();
+            const std::string& col_name = col_meta.getColumnLabel(); 
+            tmp::print_debug("col_name: ", col_name);
             // 行オブジェクトからはインデックスで値を取得する
             mysqlx::Value db_value = row.get(i);
             // 正しい変換関数を使用
@@ -372,7 +477,7 @@ public:
     void update(const ID& id, tmp::VarNode&& data) override
     {
         int status;
-        print_debug("update ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
+        tmp::print_debug("update ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
         
         // 借りたセッションを使用してデータベース操作を実行
         mysqlx::Schema db{session->getSchema(dbName)};
@@ -396,16 +501,12 @@ public:
         mysqlx::Result res = tableUpdate.where(condition)
                                         .bind("id", id)
                                         .execute();
-        print_debug("affected items count: ", res.getAffectedItemsCount());
-        
-        // ここで session_guard のデストラクタが呼ばれ、コネクションがプールに戻る
+        tmp::print_debug("affected items count: ", res.getAffectedItemsCount());
     }
     void remove(const ID& id) override
     {
         int status;
-        print_debug("remove ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
-        
-        // 借りたセッションを使用してデータベース操作を実行
+        tmp::print_debug("remove ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
         mysqlx::Schema db{session->getSchema(dbName)};
         mysqlx::Table table{db.getTable(tableName)};
         std::string condition = primaryKeyName + " = :id";
@@ -413,8 +514,7 @@ public:
                             .where(condition)
                             .bind("id", id)
                             .execute();
-        print_debug("affected items count: ", res.getAffectedItemsCount());        
-        // ここで session_guard のデストラクタが呼ばれ、コネクションがプールに戻る
+        tmp::print_debug("affected items count: ", res.getAffectedItemsCount());
 	}
 };  // VarNodeRepository
 
