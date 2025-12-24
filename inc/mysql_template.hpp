@@ -214,7 +214,7 @@ public:
         for (auto const& [field_name, field_meta] : meta) {
             // Getterを使って動的に値を取得
             std::any value = field_meta.getter(std::any(data));
-            print_debug("field_name: ", field_name);
+            tmp::print_debug("field_name: ", field_name);
             // valueを使ってSQLパラメータをバインドする処理が必要 (ここがDB依存)
             // std::cout << "Inserting " << field_meta.db_column_name << " with value: " << /* cast value */ << std::endl;
             sql_cols << field_meta.db_column_name << ",";
