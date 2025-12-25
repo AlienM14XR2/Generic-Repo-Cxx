@@ -26,7 +26,7 @@ CREATE TABLE contractor (
     name            VARCHAR(100)    NOT NULL,
     roles           VARCHAR(100)
 );
-ALTER TABLE contractor ADD CONSTRAINT email_uk unique (email);
+ALTER TABLE contractor ADD CONSTRAINT contractor_email_uk unique (email);
  * ```
  * 
  * @see builder_template.cpp
@@ -252,30 +252,30 @@ public:
     ID insert(tmp::VarNode&& data) override
     {
         int status;
-        print_debug("insert ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
+        tmp::print_debug("insert ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
         ID id = tx->query_value<ID>(SqlBuilder::nextvalSql(idSeqName));
-        print_debug("nextval: ", id);
+        tmp::print_debug("nextval: ", id);
         // 悩ましい問題だが、id（プラマリキ）はリポジトリ内部で値が決定され、data 上の値を更新するものとする。
         const auto pkeyNode = data.getChild(primaryKeyName);
         if(pkeyNode) pkeyNode->data = id;
         else throw std::runtime_error("primary key node is not found.");
         // DONE... 動的なSQL の発行が必要。
         std::string sql = SqlBuilder::insertSql(tableName, data);
-        print_debug("sql: ", sql);
+        tmp::print_debug("sql: ", sql);
         SqlBuilder builder{generate_uid(), sql};
         builder.makePrepare(tx->conn());
         pqxx::params params = builder.makeParams(data); // 一時オブジェクト
         pqxx::result result = tx->exec(builder.makePrepped(), params);
-        print_debug("affected rows: ", result.affected_rows());
+        tmp::print_debug("affected rows: ", result.affected_rows());
         return id;
     }
     void update(const ID& id, tmp::VarNode&& data) override
     {
         int status;
-        print_debug("update ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
+        tmp::print_debug("update ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
         // DONE ... VarNode から動的にUpdate SQL を作る。
         std::string sql = SqlBuilder::updateSql(tableName, data);
-        print_debug("sql: ", sql);
+        tmp::print_debug("sql: ", sql);
         SqlBuilder builder{generate_uid(), sql};
         builder.makePrepare(tx->conn());
         // id の値で data のプライマリキを先に更新する。その後、builder.makeParams(VarNode&&) を利用する。
@@ -284,30 +284,30 @@ public:
         else throw std::runtime_error("primary key node is not found.");
         pqxx::params params = builder.makeParams(data); // 一時オブジェクト
         pqxx::result result = tx->exec(builder.makePrepped(), params);
-        print_debug("affected rows: ", result.affected_rows());
+        tmp::print_debug("affected rows: ", result.affected_rows());
     }
     void remove(const ID& id) override
     {
         int status;
-        print_debug("remove ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
+        tmp::print_debug("remove ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
         std::string sql = tmp::postgres::helper::delete_by_pkey_sql(tableName, primaryKeyName);
-        print_debug("sql: ", sql);
+        tmp::print_debug("sql: ", sql);
         SqlBuilder builder{generate_uid(), sql};
         builder.makePrepare(tx->conn());
         pqxx::result result = tx->exec(builder.makePrepped(), builder.makeParams(id));
-        print_debug("affected rows: ", result.affected_rows());
+        tmp::print_debug("affected rows: ", result.affected_rows());
     }
     std::optional<tmp::VarNode> findById(const ID& id) const override
     {
         int status;
-        print_debug("findById ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
+        tmp::print_debug("findById ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
         // Step 1 データベースへの問い合わせを行う。
         std::string sql = tmp::postgres::helper::select_by_pkey_sql(tableName, primaryKeyName);
-        print_debug("sql: ", sql);
+        tmp::print_debug("sql: ", sql);
         SqlBuilder builder{generate_uid(), sql};
         builder.makePrepare(tx->conn());
         pqxx::result result = tx->exec(builder.makePrepped(), builder.makeParams(id));
-        print_debug("affected rows: ", result.affected_rows());
+        tmp::print_debug("affected rows: ", result.affected_rows());
         // Step 2 pqxx::result からVarNode の作成。
         // 結果は最大1行なので、ループではなく if (!result.empty()) で処理する
         if(!result.empty()) {
