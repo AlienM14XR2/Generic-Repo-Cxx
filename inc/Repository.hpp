@@ -125,9 +125,8 @@ struct VarNode
     // const 修飾による関数のオーバーロードあり。本メンバ関数はconst 修飾なし。
     VarNode* getChild(const std::string& _key)
     {
-        // C++20 であれば std::ranges::find_if が使えます
-        auto it = std::find_if(children.begin(), children.end(), 
-                            [&](const std::unique_ptr<VarNode>& child){
+        auto it = std::ranges::find_if(children, 
+                            [&](const auto& child){
                                 return child->key == _key;
                             });
         if (it != children.end()) {
@@ -138,8 +137,8 @@ struct VarNode
     // const 修飾による関数のオーバーロードあり。本メンバ関数はconst 修飾あり。
     const VarNode* getChild(const std::string& _key) const
     {
-        auto it = std::find_if(children.begin(), children.end(), 
-                            [&](const std::unique_ptr<VarNode>& child){
+        auto it = std::ranges::find_if(children, 
+                            [&](const auto& child){
                                 return child->key == _key;
                             });
         return (it != children.end()) ? it->get() : nullptr;
