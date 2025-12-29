@@ -3,11 +3,14 @@
 
 #include <optional>
 #include <variant>
+#include <iostream>
+#include <memory>
+#include <vector>
 
 namespace tmp {
 
 template <class M, class D>
-void (*ptr_print_debug)(M, D) = [](const auto message, const auto debug) -> void
+inline void (*ptr_print_debug)(M, D) = [](const auto message, const auto debug) -> void
 {
 #ifdef DEBUG
     std::cout << "DEBUG: " << message << '\t' << debug << std::endl;
@@ -20,12 +23,12 @@ concept ErrReasonable = requires(Error& e) {
 };
 template <class Error>
 requires ErrReasonable<Error>
-void (*ptr_print_error)(Error) = [](const auto e) -> void {
+inline void (*ptr_print_error)(Error) = [](const auto e) -> void {
     std::cerr << "ERROR: " << e.what() << std::endl;
 };
 
 // ポインタ安全な出力のためのヘルパー関数オーバーロード
-void safe_print(const char* p)
+inline void safe_print(const char* p)
 {
     if (p == nullptr) {
         std::cout << "(nullptr)";
@@ -99,6 +102,15 @@ struct VarNode
     VarNode* parent = nullptr;
     std::vector<std::unique_ptr<VarNode>> children;
 
+    // デストラクタのみ「宣言」に留める
+    ~VarNode();
+    // コピーコンストラクタの削除
+    VarNode(const VarNode&) = delete;
+    VarNode& operator=(const VarNode&) = delete;
+    // ムーブは明示的に default 指定（ただし実装ファイルが必要）
+    VarNode(VarNode&&) noexcept;
+    VarNode& operator=(VarNode&&) noexcept;
+
     // コンストラクタを ValueType を受け取るように変更
     VarNode(const std::string& _key, ValueType _data, VarNode* _parent = nullptr)
         : key(_key), data(_data), parent(_parent)
@@ -119,6 +131,10 @@ struct VarNode
     }
     VarNode* addChild(const std::string& _key, ValueType _data)
     {
+        if (auto* existing = getChild(_key)) {
+            existing->data = std::move(_data);
+            return existing;
+        }
         children.push_back(std::make_unique<VarNode>(_key, _data, this));
         return children.back().get();
     }
@@ -147,7 +163,7 @@ struct VarNode
 };  // VarNode
 
 template <typename T>
-std::optional<T> get_value_safely_optional(const VarNode* const node)
+inline std::optional<T> get_value_safely_optional(const VarNode* const node)
 {
     if (node == nullptr) {
         throw std::runtime_error("VarNode* node is null.");
@@ -159,7 +175,7 @@ std::optional<T> get_value_safely_optional(const VarNode* const node)
     }
 }
 
-void debug_print_varnode(const VarNode* const _node, std::ostream& os = std::cout, int indent = 0)
+inline void debug_print_varnode(const VarNode* const _node, std::ostream& os = std::cout, int indent = 0)
 {
     if (_node == nullptr) {
         os << "node is nil." << std::endl;

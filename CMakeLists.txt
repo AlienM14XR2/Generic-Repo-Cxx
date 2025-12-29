@@ -32,7 +32,7 @@ set(COMMON_COMPILE_DEFINITIONS
 # --- ターゲット（実行ファイル）の定義 ---
 
 # 1. PostgreSQL テストランナー
-add_executable(pqxx_template_test_runner src/pqxx_template_test.cpp)
+add_executable(pqxx_template_test_runner src/pqxx_template_test.cpp src/VarNode.cpp)
 target_include_directories(pqxx_template_test_runner PRIVATE 
     inc 
     ${PQXX_INCLUDE_DIRS}
@@ -49,7 +49,7 @@ target_compile_definitions(pqxx_template_test_runner PRIVATE ${COMMON_COMPILE_DE
 
 
 # 2. MySQL テストランナー
-add_executable(mysql_template_test_runner src/mysql_template_test.cpp)
+add_executable(mysql_template_test_runner src/mysql_template_test.cpp src/VarNode.cpp)
 target_include_directories(mysql_template_test_runner PRIVATE 
     inc
     /usr/include/mysql-cppconn/ 
@@ -66,7 +66,7 @@ target_compile_definitions(mysql_template_test_runner PRIVATE ${COMMON_COMPILE_D
 
 
 # 3. MongoDB テストランナー (追加分)
-add_executable(mongo_template_test_runner src/mongo_template_test.cpp)
+add_executable(mongo_template_test_runner src/mongo_template_test.cpp src/VarNode.cpp)
 target_include_directories(mongo_template_test_runner PRIVATE 
     inc
     /usr/local/include/bson-2.1.2/ 
@@ -93,3 +93,16 @@ target_link_libraries(object_pool_test_runner PRIVATE
 )
 target_compile_options(object_pool_test_runner PRIVATE ${COMMON_COMPILE_OPTIONS})
 target_compile_definitions(object_pool_test_runner PRIVATE ${COMMON_COMPILE_DEFINITIONS})
+
+
+# 5. VarNode 単体テストランナー
+add_executable(varnode_test_runner src/varnode_test.cpp src/VarNode.cpp)
+target_include_directories(varnode_test_runner PRIVATE 
+    inc 
+    ${GTEST_INCLUDE_DIRS}
+)
+target_link_libraries(varnode_test_runner PRIVATE 
+    GTest::gtest_main 
+)
+target_compile_options(varnode_test_runner PRIVATE ${COMMON_COMPILE_OPTIONS})
+target_compile_definitions(varnode_test_runner PRIVATE ${COMMON_COMPILE_DEFINITIONS})
