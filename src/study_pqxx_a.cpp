@@ -33,6 +33,10 @@ INSERT INTO fulltype(email, memo, age, on_busy, col_float, col_double)
 VALUES
 ('admin@loki.org', 'football player', 33, TRUE, 3.141592, 35.6809591);
 
+// バイナリ型の確認用
+ALTER TABLE fulltype ADD COLUMN raw_data BYTEA;
+
+
  * 
  * e.g. compile
  * g++ -O3 -DDEBUG -std=c++20 -pedantic-errors -Wall -Wextra -Werror -I../inc -I/usr/local/include -I/usr/include/postgresql -L/usr/local/lib study_pqxx_a.cpp -lpqxx -lpq -o ../bin/study_pqxx_a

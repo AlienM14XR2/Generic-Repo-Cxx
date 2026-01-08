@@ -202,6 +202,15 @@ inline void debug_print_varnode(const VarNode* const _node, std::ostream& os = s
                             std::is_same_v<T, std::string>) {
             // std::cout はこれらのプリミティブ型やstd::stringを安全に出力できる
             os << arg;
+        } else if constexpr (std::is_same_v<T, std::vector<uint8_t>>) {
+            // バイナリ型の出力処理を追加
+            os << "[Binary Data: " << arg.size() << " bytes]";
+            /* 
+            // 詳細を表示する場合の例
+            os << " (hex: ";
+            for(auto b : arg) os << std::hex << std::setw(2) << std::setfill('0') << (int)b << " ";
+            os << std::dec << ")";
+            */
         } else {
             // 将来ValueTypeに新しい型（例えばカスタムオブジェクトやポインタ）が追加された場合
             // コンパイルエラーにならずに、ここで処理を止めるか、汎用的な出力を行う
