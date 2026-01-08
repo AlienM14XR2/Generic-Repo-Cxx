@@ -39,9 +39,10 @@ ALTER TABLE fulltype ADD COLUMN raw_data BYTEA;
 
  * 
  * e.g. compile
- * g++ -O3 -DDEBUG -std=c++20 -pedantic-errors -Wall -Wextra -Werror -I../inc -I/usr/local/include -I/usr/include/postgresql -L/usr/local/lib study_pqxx_a.cpp -lpqxx -lpq -o ../bin/study_pqxx_a
+ * g++ -O3 -DDEBUG -std=c++20 -pedantic-errors -Wall -Wextra -Werror -I../inc -I/usr/local/include -I/usr/include/postgresql -L/usr/local/lib study_pqxx_a.cpp VarNode.cpp -lpqxx -lpq -o ../bin/study_pqxx_a
  */
 #include <iostream>
+#include <cassert>
 #include <pqxx_template.hpp>
 
 
@@ -52,9 +53,9 @@ int test_FindById(const uint64_t& _id)
     try {
         auto dataMapper = [](Data& root, const pqxx::row& row) -> void {
             // テーブルで、null を許可している場合は const char* を使わざるを得ない。
-            auto [id, email, memo, age, on_busy, col_float, col_double, created_at, updated_at]
-            = row.as<uint64_t, std::string, std::string, int64_t, bool, float, double, std::string, std::string>();
-            tmp::print_debug(id, email, memo, age, on_busy, col_float, col_double, created_at, updated_at);
+            auto [id, email, memo, age, on_busy, col_float, col_double, created_at, updated_at, raw_data]
+            = row.as<uint64_t, std::string, std::string, int64_t, bool, float, double, std::string, std::string, const char*>();
+            tmp::print_debug(id, email, memo, age, on_busy, col_float, col_double, created_at, updated_at, raw_data);
             root.addChild("id", id);
             root.addChild("email", email);
             root.addChild("memo", memo);
@@ -64,6 +65,8 @@ int test_FindById(const uint64_t& _id)
             root.addChild("col_double", col_double);
             root.addChild("created_at", created_at);
             root.addChild("updated_at", updated_at);
+            if(raw_data) root.addChild("raw_data", raw_data);
+            else root.addChild("raw_data", std::monostate{});
             // if(roles) root.addChild("roles", std::string(roles));
             // else root.addChild("roles", std::monostate{});
         };
@@ -93,6 +96,7 @@ int main()
     int ret = -1;
     if(1) {
         tmp::print_debug("Play and Result ... ", ret = test_FindById(1UL));
+        assert(ret == 0);
     }
     puts("=== main END");
     return EXIT_SUCCESS;
