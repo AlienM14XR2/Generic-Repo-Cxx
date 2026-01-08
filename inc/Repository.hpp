@@ -91,7 +91,8 @@ using ValueType = std::variant<
     float,
     double,
     bool,
-    std::string
+    std::string,
+    std::vector<uint8_t>  // バイナリデータ保持用に追加
 >;
 // ValueType (std::variant) が表現する型であれば何でも保持可能な構造体
 // ディクトリ構造も表現可能なもの

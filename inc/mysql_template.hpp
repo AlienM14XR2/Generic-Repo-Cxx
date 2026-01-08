@@ -262,6 +262,9 @@ std::vector<mysqlx::Value> convertVarNodeToSqlValues(const tmp::VarNode& data_tr
             if constexpr (std::is_same_v<T, std::monostate>) {
                 // mysqlx::Value() は内部的に NULL を保持するオブジェクトを生成する
                 values_to_bind.push_back(mysqlx::Value()); 
+            } else if constexpr (std::is_same_v<T, std::vector<uint8_t>>) {
+                mysqlx::bytes b(arg.data(), arg.size());
+                values_to_bind.push_back(mysqlx::Value(b));
             } else {
                 // その他の型は mysqlx::Value のコンストラクタが自動的に処理する
                 values_to_bind.push_back(mysqlx::Value(arg));
@@ -291,35 +294,11 @@ tmp::ValueType convertSqlValueToVarNode_Corrected(const mysqlx::Value& sql_val)
             return sql_val.get<bool>();
         case Type::STRING:
             return static_cast<std::string>(sql_val.get<mysqlx::string>());
-        // case Type::RAW: {    // 以下はDatetime のRaw データの変換方法
-        //     const auto raw = sql_val.getRawBytes(); // first: const byte*, second: size_t
-        //     auto ptr = reinterpret_cast<const uint8_t*>(raw.first);
-        //     auto end = ptr + raw.second;
-        //     auto decode_varint = [&](auto& p) {
-        //         uint64_t val = 0;
-        //         int shift = 0;
-        //         while (p < end) {
-        //             uint8_t b = *p++;
-        //             val |= static_cast<uint64_t>(b & 0x7F) << shift;
-        //             if (!(b & 0x80)) break;
-        //             shift += 7;
-        //         }
-        //         return val;
-        //     };
-        //     // 順次デコード
-        //     uint64_t year = decode_varint(ptr);
-        //     uint64_t month = (ptr < end) ? decode_varint(ptr) : 1;
-        //     uint64_t day = (ptr < end) ? decode_varint(ptr) : 1;
-        //     uint64_t hour = (ptr < end) ? decode_varint(ptr) : 0;
-        //     uint64_t min = (ptr < end) ? decode_varint(ptr) : 0;
-        //     uint64_t sec = (ptr < end) ? decode_varint(ptr) : 0;
-        //     // フォーマットして std::string に変換
-        //     char buf[32];
-        //     snprintf(buf, sizeof(buf), "%04u-%02u-%02u %02u:%02u:%02u", 
-        //             (unsigned)year, (unsigned)month, (unsigned)day, 
-        //             (unsigned)hour, (unsigned)min, (unsigned)sec);
-        //     return std::string(buf);
-        // }
+        case Type::RAW: {
+            mysqlx::bytes b = sql_val.get<mysqlx::bytes>();
+            // mysqlx::bytes から std::vector<uint8_t> へコピー
+            return std::vector<uint8_t>(b.begin(), b.end());
+        }
         default:
             tmp::print_debug("sql_val.getType(): ", sql_val.getType());
             throw std::runtime_error("Unsupported mysqlx::Value type encountered.");
@@ -490,9 +469,17 @@ public:
             // ... (visit のロジックは変更なし) ...
             std::visit([&](auto&& arg) {
                 using T = std::decay_t<decltype(arg)>;
-                if constexpr (!std::is_same_v<T, std::monostate>) {
+                if constexpr (std::is_same_v<T, std::monostate>) {
+                    // 必要に応じて NULL をセット
+                    // tableUpdate.set(child->key, mysqlx::Value());
+                } else if constexpr (std::is_same_v<T, std::vector<uint8_t>>) {
+                    // バイナリ対応
+                    mysqlx::bytes b(arg.data(), arg.size());
+                    tableUpdate.set(child->key, mysqlx::Value(b));
+                } else {
+                    // その他の型
                     mysqlx::Value sql_val(arg);
-                    tableUpdate.set(child->key, sql_val);
+                    tableUpdate.set(child->key, mysqlx::Value(sql_val));
                 }
             }, child->data);
         }

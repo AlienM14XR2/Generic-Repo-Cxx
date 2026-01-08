@@ -147,12 +147,17 @@ public:
             // std::visit を使用して ValueType の中身を取り出し、pqxx::params に変換してセットする
             std::visit([&](auto&& arg) {
                 using T = std::decay_t<decltype(arg)>;  // これカッコいいよね。
-                if constexpr (!std::is_same_v<T, std::monostate>) {
+                if constexpr (std::is_same_v<T, std::monostate>) {
+                    // NULL 値を明示的に扱う場合はここで処理
+                } else if constexpr (std::is_same_v<T, std::vector<uint8_t>>) {
+                    // バイナリ型の場合は binary_cast を使用してビルドエラーを回避
+                    params.append(pqxx::binary_cast(arg));
+                } else {
+                    // その他の型
                     // pqxx::params のコンストラクタが適切な型にしてくれる
                     pqxx::params sql_val(arg);
                     params.append(sql_val);
                 }
-                // monostate の場合は処理しない
             }, child->data);
         }
         return params;

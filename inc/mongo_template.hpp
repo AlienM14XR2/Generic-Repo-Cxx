@@ -283,6 +283,13 @@ private:
                 } else if constexpr (std::is_same_v<T, uint64_t>) {
                     // 2. uint64_t の場合：int64_t にキャストして型を固定（BSON規格に合わせる）
                     doc_builder.append(bsoncxx::builder::basic::kvp(child->key, static_cast<int64_t>(arg)));
+                } else if constexpr (std::is_same_v<T, std::vector<uint8_t>>) {
+                    // 4. std::vector<uint8_t> の場合：BSON binary 型として登録
+                    bsoncxx::types::b_binary binary_data;
+                    binary_data.sub_type = bsoncxx::binary_sub_type::k_binary;
+                    binary_data.bytes = arg.data();
+                    binary_data.size = static_cast<uint32_t>(arg.size());
+                    doc_builder.append(bsoncxx::builder::basic::kvp(child->key, binary_data));
                 } else {
                     // 3. その他の型 (int64_t, float, double, bool, std::string)
                     // これらは bsoncxx が標準でオーバーロードを持っているため直接 append 可能
@@ -329,6 +336,12 @@ private:
                         sub_doc.append(bsoncxx::builder::basic::kvp(child->key, bsoncxx::types::b_null{}));
                     } else if constexpr (std::is_same_v<T, uint64_t>) {
                         sub_doc.append(bsoncxx::builder::basic::kvp(child->key, static_cast<int64_t>(arg)));
+                    } else if constexpr (std::is_same_v<T, std::vector<uint8_t>>) {
+                        bsoncxx::types::b_binary binary_data;
+                        binary_data.sub_type = bsoncxx::binary_sub_type::k_binary;
+                        binary_data.bytes = arg.data();
+                        binary_data.size = static_cast<uint32_t>(arg.size());
+                        sub_doc.append(bsoncxx::builder::basic::kvp(child->key, binary_data));
                     } else {
                         // その他の型をサブドキュメントに追加
                         sub_doc.append(bsoncxx::builder::basic::kvp(child->key, arg));
@@ -402,6 +415,13 @@ private:
                         // OIDを文字列として VarNode に格納
                         data.addChild(std::string(e.key()), e.get_oid().value.to_string());
                         break;
+                    case bsoncxx::type::k_binary: {
+                        auto binary_view = e.get_binary();
+                        // bsoncxx::types::b_binary から std::vector<uint8_t> へ変換
+                        std::vector<uint8_t> vec(binary_view.bytes, binary_view.bytes + binary_view.size);
+                        data.addChild(std::string(e.key()), std::move(vec));
+                        break;
+                    }
                     default:
                         // サポート外の型は std::monostate もしくは無視
                         break;
@@ -414,7 +434,7 @@ private:
         }
         return std::nullopt;
     }
-};  // ContractorRepository
+};  // VarNodeRepository
 
 }   // namespace tmp::mongo::r1
 
