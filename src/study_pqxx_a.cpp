@@ -45,6 +45,9 @@ ALTER TABLE fulltype ADD COLUMN raw_data BYTEA;
 #include <cassert>
 #include <pqxx_template.hpp>
 
+constexpr std::string table = "fulltype";
+constexpr std::string idseq = "fulltype_id_seq";
+constexpr std::string pkey  = "id";
 
 int test_FindById(const uint64_t& _id)
 {
@@ -65,16 +68,17 @@ int test_FindById(const uint64_t& _id)
             root.addChild("col_double", col_double);
             root.addChild("created_at", created_at);
             root.addChild("updated_at", updated_at);
-            if(raw_data) root.addChild("raw_data", raw_data);
+            if(raw_data) {
+                // ポインタとサイズから新しいvectorを作成（コピー）
+                std::vector<uint8_t> buffer(raw_data, raw_data + strlen(raw_data));
+                root.addChild("raw_data", buffer);
+            }
             else root.addChild("raw_data", std::monostate{});
             // if(roles) root.addChild("roles", std::string(roles));
             // else root.addChild("roles", std::monostate{});
         };
         pqxx::connection conn{"hostaddr=127.0.0.1 port=5432 dbname=derek user=derek password=derek1234"};
         pqxx::work tx(conn);
-        const std::string table = "fulltype";
-        const std::string idseq = "fulltype_id_seq";
-        const std::string pkey  = "id";
         std::unique_ptr<tmp::Repository<uint64_t, Data>>
             repo = std::make_unique<tmp::postgres::r3::VarNodeRepository<uint64_t>>(&tx, table, idseq, dataMapper, pkey);
 
@@ -90,12 +94,121 @@ int test_FindById(const uint64_t& _id)
     }
 }
 
+int test_insert(uint64_t* _id)
+{
+    puts("------ test_insert");
+    using Data = tmp::VarNode;
+    using Derived = tmp::postgres::r3::VarNodeRepository<uint64_t>;
+    try {
+        pqxx::connection conn{"hostaddr=127.0.0.1 port=5432 dbname=derek user=derek password=derek1234"};
+        pqxx::work tx(conn);
+        Derived repo{&tx, table, idseq, pkey};
+
+        Data root{"_ROOT_KEY_", std::monostate{}};
+        uint64_t nid{0};
+        root.addChild(pkey, nid);
+        std::string email = "derek@loki.org";
+        root.addChild("email", email);
+        std::string memo = "Baseball player, PG";
+        root.addChild("memo", memo);
+        uint64_t age = 30ul;
+        root.addChild("age", age);
+        bool on_busy = false;
+        root.addChild("on_busy", on_busy);
+        float col_float = 3.14;
+        root.addChild("col_float", col_float);
+        float col_double = 35.6809591;
+        root.addChild("col_double", col_double);
+        std::vector<uint8_t> raw_data;
+        raw_data.push_back('a');raw_data.push_back('1');raw_data.push_back('b');raw_data.push_back('2');
+        root.addChild("raw_data", raw_data);
+
+        *_id = repo.insert(std::move(root));
+        tmp::print_debug("_id: ", *_id);
+        tx.commit();
+        conn.close();
+        return EXIT_SUCCESS;
+    } catch(std::exception& e) {
+        tmp::ptr_print_error<decltype(e)&>(e);
+        return EXIT_FAILURE;
+    }
+}
+
+int test_update(uint64_t* _id)
+{
+    puts("------ test_update");
+    using Data = tmp::VarNode;
+    using Derived = tmp::postgres::r3::VarNodeRepository<uint64_t>;
+    try {
+        pqxx::connection conn{"hostaddr=127.0.0.1 port=5432 dbname=derek user=derek password=derek1234"};
+        pqxx::work tx(conn);
+        Derived repo{&tx, table, idseq, pkey};
+
+        Data root{"_ROOT_KEY_", std::monostate{}};
+        uint64_t nid{0};
+        root.addChild(pkey, nid);
+        std::string email = "derek_u@loki.org";
+        root.addChild("email", email);
+        std::string memo = "Baseball player, PG, DBA";
+        root.addChild("memo", memo);
+        uint64_t age = 33ul;
+        root.addChild("age", age);
+        bool on_busy = true;
+        root.addChild("on_busy", on_busy);
+        float col_float = 3.141592;
+        root.addChild("col_float", col_float);
+        float col_double = 35.6809591;
+        root.addChild("col_double", col_double);
+        std::vector<uint8_t> raw_data;
+        raw_data.push_back('a');raw_data.push_back('1');
+        root.addChild("raw_data", raw_data);
+
+        repo.update(*_id, std::move(root));
+        tmp::print_debug("_id: ", *_id);
+        tx.commit();
+        conn.close();
+        return EXIT_SUCCESS;
+    } catch(std::exception& e) {
+        tmp::ptr_print_error<decltype(e)&>(e);
+        return EXIT_FAILURE;
+    }
+}
+
+int test_remove(uint64_t* _id)
+{
+    puts("------ test_remove");
+    using Derived = tmp::postgres::r3::VarNodeRepository<uint64_t>;
+    try {
+        pqxx::connection conn{"hostaddr=127.0.0.1 port=5432 dbname=derek user=derek password=derek1234"};
+        pqxx::work tx(conn);
+        Derived repo{&tx, table, idseq, pkey};
+
+        repo.remove(*_id);
+        tmp::print_debug("_id: ", *_id);
+        tx.commit();
+        conn.close();
+        return EXIT_SUCCESS;
+    } catch(std::exception& e) {
+        tmp::ptr_print_error<decltype(e)&>(e);
+        return EXIT_FAILURE;
+    }
+}
+
 int main()
 {
     puts("START main ===");
     int ret = -1;
     if(1) {
-        tmp::print_debug("Play and Result ... ", ret = test_FindById(1UL));
+        // tmp::print_debug("Play and Result ... ", ret = test_FindById(1UL));
+        // assert(ret == 0);
+        uint64_t id = 0ul;
+        tmp::print_debug("Play and Result ... ", ret = test_insert(&id));
+        assert(ret == 0);
+        tmp::print_debug("Play and Result ... ", ret = test_update(&id));
+        assert(ret == 0);
+        tmp::print_debug("Play and Result ... ", ret = test_FindById(id));
+        assert(ret == 0);
+        tmp::print_debug("Play and Result ... ", ret = test_remove(&id));
         assert(ret == 0);
     }
     puts("=== main END");
