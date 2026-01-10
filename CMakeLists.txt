@@ -106,3 +106,42 @@ target_link_libraries(varnode_test_runner PRIVATE
 )
 target_compile_options(varnode_test_runner PRIVATE ${COMMON_COMPILE_OPTIONS})
 target_compile_definitions(varnode_test_runner PRIVATE ${COMMON_COMPILE_DEFINITIONS})
+
+# --- 共有ライブラリの定義 ---
+# Panama (Java) からロードするためのブリッジライブラリ
+add_library(varnode_bridge SHARED 
+    src/VarNode.cpp 
+    src/bridge.cpp   # ← 今後作成する C 形式のインターフェース層
+)
+
+# 共有ライブラリに必要な依存関係をリンク
+# (既存のDBドライバをすべて集約、または必要なものに絞る)
+target_link_libraries(varnode_bridge PRIVATE 
+    ${PQXX_LIBRARIES} 
+    ${PQ_LIBRARIES} 
+    mysqlcppconn 
+    mysqlcppconnx
+    ${MONGOCXX_LIBRARIES}
+    bson2
+)
+
+# インクルードパスの設定
+target_include_directories(varnode_bridge PRIVATE 
+    inc
+    /usr/include/mysql-cppconn/
+    /usr/local/include
+    ${PQXX_INCLUDE_DIRS}
+    ${PQ_INCLUDE_DIRS}
+    ${MONGOCXX_INCLUDE_DIRS}
+)
+
+# 共通オプションの適用
+target_compile_options(varnode_bridge PRIVATE ${COMMON_COMPILE_OPTIONS})
+target_compile_definitions(varnode_bridge PRIVATE ${COMMON_COMPILE_DEFINITIONS})
+
+# シンボルの隠蔽設定 (エクスポート対象以外を隠す)
+set_target_properties(varnode_bridge PROPERTIES
+    CXX_VISIBILITY_PRESET hidden
+    VISIBILITY_INLINES_HIDDEN ON
+)
+
