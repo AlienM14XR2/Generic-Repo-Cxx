@@ -1,3 +1,13 @@
+/**
+ * Foreign Function & Memory API (Project Panama) の動作確認用サンプル。
+ * 
+ * @see CMakeLists.txt ... varnode_bridge
+ * e.g. cmake コマンド
+ * mkdir build && cd build
+ * cmake ..
+ * make varnode_bridge
+ */
+
 #include "Repository.hpp" // 既存のヘッダ
 #include <iostream>
 #include <string>
