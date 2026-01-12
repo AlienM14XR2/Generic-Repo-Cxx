@@ -91,10 +91,12 @@ extern "C" {
 
     // 2.e 子要素を追加 (binary ... std::vector<uint8_t>)
     __attribute__((visibility("default")))
-    void add_child_binary(void* node_ptr, const char* key, const char* value) {
+    void add_child_binary(void* node_ptr, const char* key, const uint8_t* data, const size_t data_len)
+    {
         auto* node = static_cast<tmp::VarNode*>(node_ptr);
-        if (node) {
-            std::vector<uint8_t> buffer(value, value + strlen(value)); 
+        if (node && data) {
+            // ポインタとサイズを指定してベクタを初期化
+            std::vector<uint8_t> buffer(data, data + data_len); 
             node->addChild(std::string(key), buffer);
         }
     }
@@ -109,11 +111,57 @@ extern "C" {
         }
     }
 
-    // 4. メモリ解放
+    // 4. RDBMS(MySQL X Dev API) のコネクション取得・生成
+    __attribute__((visibility("default")))
+    void* create_session_mysql(const char* host, const int32_t port, const char* user, const char* pass)
+    {
+        try {
+            return new mysqlx::Session(host, port, user, pass);
+        } catch(...) {
+            return nullptr;
+        }
+    }
+
+    // 5. Insert 処理
+    __attribute__((visibility("default")))
+    int64_t insert_varnode_mysql(void* session_ptr, void* node_ptr, const char* dbName, const char* tableName)
+    {
+        using Derived = tmp::mysql::r3::VarNodeRepository<int64_t>;
+        const std::string primaryKeyName = "id";
+        try {
+            auto* sess = static_cast<mysqlx::Session*>(session_ptr);
+            auto* node = static_cast<tmp::VarNode*>(node_ptr);
+            if(sess && node) {
+                Derived repo{sess, dbName, tableName, primaryKeyName};
+                sess->startTransaction();
+                int64_t id = repo.insert(std::move(*node));
+                sess->commit();
+                return id;
+            }
+            return 0L;
+        } catch(std::exception& e) {
+            tmp::ptr_print_error<decltype(e)&>(e);
+            return 0L;
+        } catch(...) {
+            tmp::print_debug("Unknown Exception Occurred.");
+            return 0L;
+        }
+    }
+
+    // 6. メモリ解放
     __attribute__((visibility("default")))
     void destroy_varnode(void* node_ptr) {
         if (node_ptr) {
             delete static_cast<tmp::VarNode*>(node_ptr);
+        }
+    }
+
+    // 6.a メモリ解放 RDBMS(MySQL X Dev API) のコネクション
+    __attribute__((visibility("default")))
+    void destroy_session_mysql(void* session)
+    {
+        if(session) {
+            delete static_cast<mysqlx::Session*>(session);
         }
     }
 }
