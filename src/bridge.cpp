@@ -15,6 +15,19 @@
 
 // using namespace tmp;
 
+struct Fulltype final
+{
+    uint64_t id;
+    std::string email;
+    std::optional<std::string> memo;
+    std::optional<int64_t> age;
+    std::optional<bool> on_busy;
+    std::optional<float> col_float;
+    std::optional<double> col_double;
+    std::optional<std::vector<uint8_t>> raw_data;
+    std::optional<std::string> created_at;
+    std::optional<std::string> updated_at;
+};
 
 // 名前修飾を防ぎ、外部から見えるように定義
 extern "C" {
