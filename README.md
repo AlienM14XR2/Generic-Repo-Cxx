@@ -1,6 +1,6 @@
 ※ AI によるおそらくバイアスがかかった上での出力であることを明記する。
 
-### 【開発概要：汎用Repository & VarNode フレームワーク】
+## 【開発概要：汎用Repository & VarNode フレームワーク】
 
 1. 開発期間と成果：
    - 期間：特定の期間内（約一ヶ月）
@@ -17,3 +17,17 @@
 3. 開発の特徴：
    - 複雑なインフラストラクチャの違いを抽象化する設計アプローチ。
    - 広範なデータベース知識の応用。
+
+### CMAKE
+```
+mkdir build
+cd build
+cmake .. -DCMAKE_BUILD_TYPE=Release
+cmake --build .
+
+cd ..
+mkdir build_debug
+cd build_debug
+cmake .. -DCMAKE_BUILD_TYPE=Debug
+cmake --build .
+```

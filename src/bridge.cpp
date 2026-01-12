@@ -7,13 +7,14 @@
  * cmake ..
  * make varnode_bridge
  */
-
 #include "Repository.hpp" // 既存のヘッダ
+#include "mysql_template.hpp"
 #include <iostream>
 #include <string>
 #include <vector>
 
-using namespace tmp;
+// using namespace tmp;
+
 
 // 名前修飾を防ぎ、外部から見えるように定義
 extern "C" {
@@ -23,7 +24,7 @@ extern "C" {
     void* create_varnode(const char* key) {
         try {
             // key, data (std::monostate), parent (nullptr) で初期化
-            return new VarNode(std::string(key), std::monostate{}, nullptr);
+            return new tmp::VarNode(std::string(key), std::monostate{}, nullptr);
         } catch (...) {
             return nullptr;
         }
@@ -32,17 +33,26 @@ extern "C" {
     // 2. 子要素を追加 (String限定版)
     __attribute__((visibility("default")))
     void add_child_str(void* node_ptr, const char* key, const char* value) {
-        auto* node = static_cast<VarNode*>(node_ptr);
+        auto* node = static_cast<tmp::VarNode*>(node_ptr);
         if (node) {
             // C++側の addChild を呼び出し、ValueTypeとしてstd::stringを渡す
             node->addChild(std::string(key), std::string(value));
         }
     }
 
+    __attribute__((visibility("default")))
+    void add_child_int64_t(void* node_ptr, const char* key, const int64_t value) {
+        auto* node = static_cast<tmp::VarNode*>(node_ptr);
+        if (node) {
+            // C++側の addChild を呼び出し、ValueTypeとしてint64_t を渡す
+            node->addChild(std::string(key), value);
+        }
+    }
+
     // 3. デバッグ表示の実行
     __attribute__((visibility("default")))
     void debug_varnode(void* node_ptr) {
-        auto* node = static_cast<VarNode*>(node_ptr);
+        auto* node = static_cast<tmp::VarNode*>(node_ptr);
         if (node) {
             // 共有されたグローバルなインライン関数を呼び出し
             debug_print_varnode(node, std::cout, 0);
@@ -53,7 +63,7 @@ extern "C" {
     __attribute__((visibility("default")))
     void destroy_varnode(void* node_ptr) {
         if (node_ptr) {
-            delete static_cast<VarNode*>(node_ptr);
+            delete static_cast<tmp::VarNode*>(node_ptr);
         }
     }
 }
