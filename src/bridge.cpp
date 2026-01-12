@@ -15,19 +15,19 @@
 
 // using namespace tmp;
 
-struct Fulltype final
-{
-    uint64_t id;
-    std::string email;
-    std::optional<std::string> memo;
-    std::optional<int64_t> age;
-    std::optional<bool> on_busy;
-    std::optional<float> col_float;
-    std::optional<double> col_double;
-    std::optional<std::vector<uint8_t>> raw_data;
-    std::optional<std::string> created_at;
-    std::optional<std::string> updated_at;
-};
+// struct Fulltype final
+// {
+//     uint64_t id;
+//     std::string email;
+//     std::optional<std::string> memo;
+//     std::optional<int64_t> age;
+//     std::optional<bool> on_busy;
+//     std::optional<float> col_float;
+//     std::optional<double> col_double;
+//     std::optional<std::vector<uint8_t>> raw_data;
+//     std::optional<std::string> created_at;
+//     std::optional<std::string> updated_at;
+// };
 
 // 名前修飾を防ぎ、外部から見えるように定義
 extern "C" {
@@ -53,12 +53,49 @@ extern "C" {
         }
     }
 
+    // 2.a 子要素を追加 (int64_t)
     __attribute__((visibility("default")))
     void add_child_int64_t(void* node_ptr, const char* key, const int64_t value) {
         auto* node = static_cast<tmp::VarNode*>(node_ptr);
         if (node) {
-            // C++側の addChild を呼び出し、ValueTypeとしてint64_t を渡す
             node->addChild(std::string(key), value);
+        }
+    }
+
+    // 2.b 子要素を追加 (bool)
+    __attribute__((visibility("default")))
+    void add_child_bool(void* node_ptr, const char* key, const bool value) {
+        auto* node = static_cast<tmp::VarNode*>(node_ptr);
+        if (node) {
+            node->addChild(std::string(key), value);
+        }
+    }
+
+    // 2.c 子要素を追加 (float)
+    __attribute__((visibility("default")))
+    void add_child_float(void* node_ptr, const char* key, const float value) {
+        auto* node = static_cast<tmp::VarNode*>(node_ptr);
+        if (node) {
+            node->addChild(std::string(key), value);
+        }
+    }
+
+    // 2.d 子要素を追加 (double)
+    __attribute__((visibility("default")))
+    void add_child_double(void* node_ptr, const char* key, const double value) {
+        auto* node = static_cast<tmp::VarNode*>(node_ptr);
+        if (node) {
+            node->addChild(std::string(key), value);
+        }
+    }
+
+    // 2.e 子要素を追加 (binary ... std::vector<uint8_t>)
+    __attribute__((visibility("default")))
+    void add_child_binary(void* node_ptr, const char* key, const char* value) {
+        auto* node = static_cast<tmp::VarNode*>(node_ptr);
+        if (node) {
+            std::vector<uint8_t> buffer(value, value + strlen(value)); 
+            node->addChild(std::string(key), buffer);
         }
     }
 
