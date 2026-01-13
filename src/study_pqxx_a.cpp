@@ -12,7 +12,8 @@ using ValueType = std::variant<
     float,
     double,
     bool,
-    std::string
+    std::string,
+    std::vector<uint8_t>  // バイナリデータ保持用に追加
 >;
 
 // PostgreSQL
@@ -39,7 +40,7 @@ ALTER TABLE fulltype ADD COLUMN raw_data BYTEA;
 
  * 
  * e.g. compile
- * g++ -O3 -DDEBUG -std=c++20 -pedantic-errors -Wall -Wextra -Werror -I../inc -I/usr/local/include -I/usr/include/postgresql -L/usr/local/lib study_pqxx_a.cpp VarNode.cpp -lpqxx -lpq -o ../bin/study_pqxx_a
+ * g++ -O3 -DDEBUG -std=c++20 -pedantic-errors -Wall -Wextra -Werror -I../inc -I/usr/local/include -I/usr/include/postgresql -L/usr/local/lib study_pqxx_a.cpp VarNode.cpp -lpqxx -lpq -lbase64pp -o ../bin/study_pqxx_a
  */
 #include <iostream>
 #include <cassert>
@@ -54,39 +55,44 @@ int test_FindById(const uint64_t& _id)
     puts("------ test_FindById");
     using Data = tmp::VarNode;
     try {
-        auto dataMapper = [](Data& root, const pqxx::row& row) -> void {
-            // テーブルで、null を許可している場合は const char* を使わざるを得ない。
-            auto [id, email, memo, age, on_busy, col_float, col_double, created_at, updated_at, raw_data]
-            = row.as<uint64_t, std::string, std::string, int64_t, bool, float, double, std::string, std::string, const char*>();
-            tmp::print_debug(id, email, memo, age, on_busy, col_float, col_double, created_at, updated_at, raw_data);
-            root.addChild("id", id);
-            root.addChild("email", email);
-            root.addChild("memo", memo);
-            root.addChild("age", age);
-            root.addChild("on_busy", on_busy);
-            root.addChild("col_float", col_float);
-            root.addChild("col_double", col_double);
-            root.addChild("created_at", created_at);
-            root.addChild("updated_at", updated_at);
-            if(raw_data) {
-                // ポインタとサイズから新しいvectorを作成（コピー）
-                std::vector<uint8_t> buffer(raw_data, raw_data + strlen(raw_data));
-                root.addChild("raw_data", buffer);
-            }
-            else root.addChild("raw_data", std::monostate{});
-            // if(roles) root.addChild("roles", std::string(roles));
-            // else root.addChild("roles", std::monostate{});
-        };
+        // auto dataMapper = [](Data& root, const pqxx::row& row) -> void {
+        //     // テーブルで、null を許可している場合は const char* を使わざるを得ない。
+        //     auto [id, email, memo, age, on_busy, col_float, col_double, created_at, updated_at, raw_data]
+        //     = row.as<uint64_t, std::string, std::string, int64_t, bool, float, double, std::string, std::string, const char*>();
+        //     tmp::print_debug(id, email, memo, age, on_busy, col_float, col_double, created_at, updated_at, raw_data);
+        //     root.addChild("id", id);
+        //     root.addChild("email", email);
+        //     root.addChild("memo", memo);
+        //     root.addChild("age", age);
+        //     root.addChild("on_busy", on_busy);
+        //     root.addChild("col_float", col_float);
+        //     root.addChild("col_double", col_double);
+        //     root.addChild("created_at", created_at);
+        //     root.addChild("updated_at", updated_at);
+        //     if(raw_data) {
+        //         // ポインタとサイズから新しいvectorを作成（コピー）
+        //         std::vector<uint8_t> buffer(raw_data, raw_data + strlen(raw_data));
+        //         root.addChild("raw_data", buffer);
+        //     }
+        //     else root.addChild("raw_data", std::monostate{});
+        //     // if(roles) root.addChild("roles", std::string(roles));
+        //     // else root.addChild("roles", std::monostate{});
+        // };
         pqxx::connection conn{"hostaddr=127.0.0.1 port=5432 dbname=derek user=derek password=derek1234"};
         pqxx::work tx(conn);
         std::unique_ptr<tmp::Repository<uint64_t, Data>>
-            repo = std::make_unique<tmp::postgres::r3::VarNodeRepository<uint64_t>>(&tx, table, idseq, dataMapper, pkey);
+            repo = std::make_unique<tmp::postgres::r3::VarNodeRepository<uint64_t>>(&tx, table, idseq, pkey);
 
         std::optional<Data> result = repo->findById(_id);
         tx.commit();
         conn.close();
         if(result) tmp::debug_print_varnode(&(result.value()));
         else throw std::runtime_error("UnExpects result.");
+        if(result) {
+            nlohmann::json j;
+            tmp::to_json(j, result.value());
+            std::cout << j.dump(4) << std::endl;
+        }
         return EXIT_SUCCESS;
     } catch(std::exception& e) {
         tmp::ptr_print_error<decltype(e)&>(e);

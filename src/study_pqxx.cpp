@@ -3,7 +3,7 @@
  * 
  * 
  * e.g. compile
- * g++ -O3 -DDEBUG -std=c++20 -pedantic-errors -Wall -Wextra -Werror -I../inc -I/usr/local/include -I/usr/include/postgresql -L/usr/local/lib study_pqxx.cpp -lpqxx -lpq -o ../bin/study_pqxx
+ * g++ -O3 -DDEBUG -std=c++20 -pedantic-errors -Wall -Wextra -Werror -I../inc -I/usr/local/include -I/usr/include/postgresql -L/usr/local/lib study_pqxx.cpp VarNode.cpp -lpqxx -lpq -o ../bin/study_pqxx
  */
 #include <iostream>
 #include <memory>

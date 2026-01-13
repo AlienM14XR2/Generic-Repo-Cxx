@@ -5,9 +5,9 @@
  * 
  * e.g. compile
  * 非常に厳格。
- * g++ -O3 -std=c++20 -DDEBUG -pedantic-errors -Wall -Wextra -Werror -I../inc/ -I/usr/include/mysql-cppconn/ -L/usr/lib/x86_64-linux-gnu/ study_mysql.cpp -lmysqlcppconn -lmysqlcppconnx -o ../bin/study_mysql
+ * g++ -O3 -std=c++20 -DDEBUG -pedantic-errors -Wall -Wextra -Werror -I../inc/ -I/usr/include/mysql-cppconn/ -L/usr/lib/x86_64-linux-gnu/ study_mysql.cpp VarNode.cpp -lmysqlcppconn -lmysqlcppconnx -o ../bin/study_mysql
  * 実験、サンプリングでは以下を推奨（-Wextra があると簡単に関数内をすべてコメントとかできないから。
- * g++ -O3 -std=c++20 -DDEBUG -pedantic-errors -Wall -Werror -I../inc/ -I/usr/include/mysql-cppconn/ -L/usr/lib/x86_64-linux-gnu/ study_mysql.cpp -lmysqlcppconn -lmysqlcppconnx -o ../bin/study_mysql
+ * g++ -O3 -std=c++20 -DDEBUG -pedantic-errors -Wall -Werror -I../inc/ -I/usr/include/mysql-cppconn/ -L/usr/lib/x86_64-linux-gnu/ study_mysql.cpp VarNode.cpp -lmysqlcppconn -lmysqlcppconnx -o ../bin/study_mysql
  */
 #include <iostream>
 #include <memory>

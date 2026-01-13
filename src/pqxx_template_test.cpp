@@ -169,11 +169,11 @@ TEST_F(VarNodeRepositoryTest, InsertAndFindById)
     // 5. findById で検索
     tmp::postgres::r3::VarNodeRepository<unsigned long> repo_find(
         tx.get(), TEST_TABLE, TEST_SEQ, // tx.get() でトランザクションのポインタを渡す
-        [](tmp::VarNode& root, const pqxx::row& row){
-            // テスト用のシンプルなマッパー
-            root.addChild("id", row["id"].as<uint64_t>());
-            root.addChild("email", row["email"].as<std::string>());
-        }, 
+        // [](tmp::VarNode& root, const pqxx::row& row){
+        //     // テスト用のシンプルなマッパー
+        //     root.addChild("id", row["id"].as<uint64_t>());
+        //     root.addChild("email", row["email"].as<std::string>());
+        // }, 
         TEST_PK
     );
 
@@ -221,15 +221,15 @@ TEST_F(VarNodeRepositoryTest, Insert_Update_FindById)
     // 6. findById で検索
     tmp::postgres::r3::VarNodeRepository<unsigned long> repo_find(
         tx.get(), TEST_TABLE, TEST_SEQ, // tx.get() でトランザクションのポインタを渡す
-        [](tmp::VarNode& root, const pqxx::row& row){
-            // テスト用のシンプルなマッパー
-            root.addChild("id",         row["id"].as<uint64_t>());
-            root.addChild("company_id", row["company_id"].as<std::string>());
-            root.addChild("email",      row["email"].as<std::string>());
-            root.addChild("password",   row["password"].as<std::string>());
-            root.addChild("name",       row["name"].as<std::string>());
-            root.addChild("roles",      row["roles"].as<std::string>());
-        }, 
+        // [](tmp::VarNode& root, const pqxx::row& row){
+        //     // テスト用のシンプルなマッパー
+        //     root.addChild("id",         row["id"].as<uint64_t>());
+        //     root.addChild("company_id", row["company_id"].as<std::string>());
+        //     root.addChild("email",      row["email"].as<std::string>());
+        //     root.addChild("password",   row["password"].as<std::string>());
+        //     root.addChild("name",       row["name"].as<std::string>());
+        //     root.addChild("roles",      row["roles"].as<std::string>());
+        // }, 
         TEST_PK
     );
     std::optional<tmp::VarNode> found_node = repo_find.findById(new_id);
@@ -276,15 +276,15 @@ TEST_F(VarNodeRepositoryTest, Insert_Remove_FindById)
     // 6. findById で検索
     tmp::postgres::r3::VarNodeRepository<unsigned long> repo_find(
         tx.get(), TEST_TABLE, TEST_SEQ, // tx.get() でトランザクションのポインタを渡す
-        [](tmp::VarNode& root, const pqxx::row& row){
-            // テスト用のシンプルなマッパー
-            root.addChild("id",         row["id"].as<uint64_t>());
-            root.addChild("company_id", row["company_id"].as<std::string>());
-            root.addChild("email",      row["email"].as<std::string>());
-            root.addChild("password",   row["password"].as<std::string>());
-            root.addChild("name",       row["name"].as<std::string>());
-            root.addChild("roles",      row["roles"].as<std::string>());
-        }, 
+        // [](tmp::VarNode& root, const pqxx::row& row){
+        //     // テスト用のシンプルなマッパー
+        //     root.addChild("id",         row["id"].as<uint64_t>());
+        //     root.addChild("company_id", row["company_id"].as<std::string>());
+        //     root.addChild("email",      row["email"].as<std::string>());
+        //     root.addChild("password",   row["password"].as<std::string>());
+        //     root.addChild("name",       row["name"].as<std::string>());
+        //     root.addChild("roles",      row["roles"].as<std::string>());
+        // }, 
         TEST_PK
     );
     std::optional<tmp::VarNode> found_node = repo_find.findById(new_id);
@@ -293,7 +293,7 @@ TEST_F(VarNodeRepositoryTest, Insert_Remove_FindById)
 }
 TEST_F(VarNodeRepositoryTest, ServiceLayer_CRUD_cycle)
 {
-    using Data = tmp::VarNode;
+    // using Data = tmp::VarNode;
     // Poolオブジェクトの作成
     auto pool = ObjectPool<pqxx::connection>::create("postgres");
     // コネクション（セッション）をひとつPool に確保。
@@ -306,19 +306,19 @@ TEST_F(VarNodeRepositoryTest, ServiceLayer_CRUD_cycle)
     const std::string pkey  = "id";
     tmp::postgres::r3::VarNodeRepository<uint64_t> insert_repo{&tx, table, idseq, pkey};
     tmp::postgres::r3::VarNodeRepository<uint64_t> update_repo{&tx, table, idseq, pkey};
-    auto dataMapper = [](Data& root, const pqxx::row& row) -> void {
-        // テーブルで、null を許可している場合は const char* を使わざるを得ない。
-        auto [id, companyId, email, password, name, roles] = row.as<uint64_t, std::string, std::string, std::string, std::string, const char*>();
-        tmp::print_debug(id, companyId, email, password, name, roles);
-        root.addChild("id", id);
-        root.addChild("companyId", companyId);
-        root.addChild("email", email);
-        root.addChild("password", password);
-        root.addChild("name", name);
-        if(roles) root.addChild("roles", std::string(roles));
-        else root.addChild("roles", std::monostate{});
-    };
-    tmp::postgres::r3::VarNodeRepository<uint64_t> find_repo{&tx, table, idseq, dataMapper, pkey};
+    // auto dataMapper = [](Data& root, const pqxx::row& row) -> void {
+    //     // テーブルで、null を許可している場合は const char* を使わざるを得ない。
+    //     auto [id, companyId, email, password, name, roles] = row.as<uint64_t, std::string, std::string, std::string, std::string, const char*>();
+    //     tmp::print_debug(id, companyId, email, password, name, roles);
+    //     root.addChild("id", id);
+    //     root.addChild("companyId", companyId);
+    //     root.addChild("email", email);
+    //     root.addChild("password", password);
+    //     root.addChild("name", name);
+    //     if(roles) root.addChild("roles", std::string(roles));
+    //     else root.addChild("roles", std::monostate{});
+    // };
+    tmp::postgres::r3::VarNodeRepository<uint64_t> find_repo{&tx, table, idseq, pkey};
     tmp::postgres::r3::VarNodeRepository<uint64_t> remove_repo{&tx, table, idseq, pkey};
     MyBusinessService service(
         std::move(insert_repo), 

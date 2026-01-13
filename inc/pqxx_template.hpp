@@ -259,7 +259,7 @@ tmp::ValueType convertPqFieldToVarNode(const pqxx::field& f)
     }
 }
 
-using VarNodeMapper = std::function<void(tmp::VarNode& root, const pqxx::row& row)>;
+// using VarNodeMapper = std::function<void(tmp::VarNode& root, const pqxx::row& row)>;
 template <class ID>
 class VarNodeRepository : public tmp::Repository<ID, tmp::VarNode>
 {
@@ -267,7 +267,7 @@ private:
     pqxx::work* const tx;
     std::string tableName;
     std::string idSeqName;
-    const VarNodeMapper mapper; // 関数オブジェクト、現状 findById() 内で利用するもの。
+    // const VarNodeMapper mapper; // 関数オブジェクト、現状 findById() 内で利用するもの。
     const std::string primaryKeyName;
 public:
     VarNodeRepository(
@@ -278,15 +278,15 @@ public:
     )
     : tx{_tx}, tableName{_table}, idSeqName{_idseq}, primaryKeyName{_primaryKeyName}
     {}
-    VarNodeRepository(
-        pqxx::work* const    _tx
-        , const std::string& _table
-        , const std::string& _idseq
-        , VarNodeMapper _mapper
-        , const std::string& _primaryKeyName = "id"
-    )
-    : tx{_tx}, tableName{_table}, idSeqName{_idseq}, mapper{std::move(_mapper)}, primaryKeyName{_primaryKeyName}
-    {}
+    // VarNodeRepository(
+    //     pqxx::work* const    _tx
+    //     , const std::string& _table
+    //     , const std::string& _idseq
+    //     , VarNodeMapper _mapper
+    //     , const std::string& _primaryKeyName = "id"
+    // )
+    // : tx{_tx}, tableName{_table}, idSeqName{_idseq}, mapper{std::move(_mapper)}, primaryKeyName{_primaryKeyName}
+    // {}
     ID insert(tmp::VarNode&& data) override
     {
         int status;
@@ -663,25 +663,25 @@ int test_VarNodeRepository_Find(uint64_t* id)
     puts("------ test_VarNodeRepository_Find");
     using Data = tmp::VarNode;
     try {
-        auto dataMapper = [](Data& root, const pqxx::row& row) -> void {
-            // テーブルで、null を許可している場合は const char* を使わざるを得ない。
-            auto [id, companyId, email, password, name, roles] = row.as<uint64_t, std::string, std::string, std::string, std::string, const char*>();
-            tmp::print_debug(id, companyId, email, password, name, roles);
-            root.addChild("id", id);
-            root.addChild("companyId", companyId);
-            root.addChild("email", email);
-            root.addChild("password", password);
-            root.addChild("name", name);
-            if(roles) root.addChild("roles", std::string(roles));
-            else root.addChild("roles", std::monostate{});
-        };
+        // auto dataMapper = [](Data& root, const pqxx::row& row) -> void {
+        //     // テーブルで、null を許可している場合は const char* を使わざるを得ない。
+        //     auto [id, companyId, email, password, name, roles] = row.as<uint64_t, std::string, std::string, std::string, std::string, const char*>();
+        //     tmp::print_debug(id, companyId, email, password, name, roles);
+        //     root.addChild("id", id);
+        //     root.addChild("companyId", companyId);
+        //     root.addChild("email", email);
+        //     root.addChild("password", password);
+        //     root.addChild("name", name);
+        //     if(roles) root.addChild("roles", std::string(roles));
+        //     else root.addChild("roles", std::monostate{});
+        // };
         pqxx::connection conn{"hostaddr=127.0.0.1 port=5432 dbname=derek user=derek password=derek1234"};
         pqxx::work tx(conn);
         const std::string table = "contractor";
         const std::string idseq = "contractor_id_seq";
         const std::string pkey  = "id";
         std::unique_ptr<tmp::Repository<uint64_t, Data>>
-            repo = std::make_unique<tmp::postgres::r3::VarNodeRepository<uint64_t>>(&tx, table, idseq, dataMapper, pkey);
+            repo = std::make_unique<tmp::postgres::r3::VarNodeRepository<uint64_t>>(&tx, table, idseq, pkey);
 
         std::optional<Data> result = repo->findById(*id);
         tx.commit();
