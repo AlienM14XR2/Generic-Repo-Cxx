@@ -225,6 +225,39 @@ public:
 
 };
 
+// pqxx の OID に基づく動的変換
+tmp::ValueType convertPqFieldToVarNode(const pqxx::field& f)
+{
+    if (f.is_null()) return std::monostate{};
+    // PostgreSQL 標準 OID (pg_type_d.h より)
+    switch(f.type()) {
+        case 16:   // bool
+            return f.as<bool>();
+        case 20:   // int8 (bigint)
+        case 23:   // int4 (integer)
+            return f.as<int64_t>();
+        case 700:  // float4
+        case 701:  // float8
+            return f.as<double>();
+        case 17: { // bytea (binary)
+            // libpqxx 7.x では bytes (byteのview) を取得し、コンテナへ変換する
+            pqxx::bytes b = f.as<pqxx::bytes>();
+            // std::basic_string_view<std::byte> から std::vector<uint8_t> へ
+            return std::vector<uint8_t>{
+                reinterpret_cast<const uint8_t*>(b.data()), 
+                reinterpret_cast<const uint8_t*>(b.data()) + b.size()
+            };
+        }
+        case 25:   // text
+        case 1043: // varchar
+        case 1114: // timestamp
+        case 1184: // timestamptz
+            return f.as<std::string>();
+        default:
+            // 未知の型は安全のために文字列として試行する
+            return f.as<std::string>();
+    }
+}
 
 using VarNodeMapper = std::function<void(tmp::VarNode& root, const pqxx::row& row)>;
 template <class ID>
@@ -318,7 +351,9 @@ public:
         if(!result.empty()) {
             VarNode result_entity("result_row", std::monostate{});
             const auto& row = result[0];
-            mapper(result_entity, row);
+            for (const auto& field : row) {
+                result_entity.addChild(field.name(), convertPqFieldToVarNode(field));
+            }
             return result_entity;
         }
         return std::nullopt;
