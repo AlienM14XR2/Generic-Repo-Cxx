@@ -259,7 +259,6 @@ tmp::ValueType convertPqFieldToVarNode(const pqxx::field& f)
     }
 }
 
-// using VarNodeMapper = std::function<void(tmp::VarNode& root, const pqxx::row& row)>;
 template <class ID>
 class VarNodeRepository : public tmp::Repository<ID, tmp::VarNode>
 {
@@ -267,7 +266,6 @@ private:
     pqxx::work* const tx;
     std::string tableName;
     std::string idSeqName;
-    // const VarNodeMapper mapper; // 関数オブジェクト、現状 findById() 内で利用するもの。
     const std::string primaryKeyName;
 public:
     VarNodeRepository(
@@ -278,15 +276,6 @@ public:
     )
     : tx{_tx}, tableName{_table}, idSeqName{_idseq}, primaryKeyName{_primaryKeyName}
     {}
-    // VarNodeRepository(
-    //     pqxx::work* const    _tx
-    //     , const std::string& _table
-    //     , const std::string& _idseq
-    //     , VarNodeMapper _mapper
-    //     , const std::string& _primaryKeyName = "id"
-    // )
-    // : tx{_tx}, tableName{_table}, idSeqName{_idseq}, mapper{std::move(_mapper)}, primaryKeyName{_primaryKeyName}
-    // {}
     ID insert(tmp::VarNode&& data) override
     {
         int status;
@@ -452,23 +441,6 @@ public:
         }
         return result;
     }
-    // void cudProc_v1(std::vector<std::string>&& sqlSyntax)
-    // {
-    //     for(auto sql: sqlSyntax) {
-    //         tx->exec(sql);
-    //     }
-    //     // size_t size = sqlSyntax.size();
-    //     // size_t i = 0;
-    //     // for(auto sql: sqlSyntax) {
-    //     //     i++;
-    //     //     if(i < size) tx->exec(sql);
-    //     //     else {
-    //     //         // 結果の返却がないならもった単純にかけるね。
-    //     //         pqxx::result res = tx->exec(sql);
-    //     //         std::cout << "columns: " << res.columns() << std::endl;
-    //     //     }
-    //     // }
-    // }
     void cudProc_v1(std::vector<std::string>&& sqlSyntax)
     {
         size_t size = sqlSyntax.size();
