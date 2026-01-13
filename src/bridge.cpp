@@ -13,21 +13,7 @@
 #include <string>
 #include <vector>
 
-// using namespace tmp;
-
-// struct Fulltype final
-// {
-//     uint64_t id;
-//     std::string email;
-//     std::optional<std::string> memo;
-//     std::optional<int64_t> age;
-//     std::optional<bool> on_busy;
-//     std::optional<float> col_float;
-//     std::optional<double> col_double;
-//     std::optional<std::vector<uint8_t>> raw_data;
-//     std::optional<std::string> created_at;
-//     std::optional<std::string> updated_at;
-// };
+constexpr std::string primaryKeyName = "id";
 
 // 名前修飾を防ぎ、外部から見えるように定義
 extern "C" {
@@ -122,12 +108,11 @@ extern "C" {
         }
     }
 
-    // 5. Insert 処理
+    // 5. Insert 処理 RDBMS(MySQL X Dev API)
     __attribute__((visibility("default")))
     int64_t insert_varnode_mysql(void* session_ptr, void* node_ptr, const char* dbName, const char* tableName)
     {
         using Derived = tmp::mysql::r3::VarNodeRepository<int64_t>;
-        const std::string primaryKeyName = "id";
         try {
             auto* sess = static_cast<mysqlx::Session*>(session_ptr);
             auto* node = static_cast<tmp::VarNode*>(node_ptr);
@@ -143,12 +128,36 @@ extern "C" {
             tmp::ptr_print_error<decltype(e)&>(e);
             return 0L;
         } catch(...) {
-            tmp::print_debug("Unknown Exception Occurred.");
+            std::cerr << "Unknown Exception Occurred." << std::endl;
             return 0L;
         }
     }
 
-    // 6. メモリ解放
+    // 6. Update 処理 
+    // 7. Find 処理
+    // 8. Remove 処理 RDBMS(MySQL X Dev API)
+    __attribute__((visibility("default")))
+    void remove_varnode_mysql(void* session_ptr, const int64_t primaryKey, const char* dbName, const char* tableName)
+    {
+        using Derived = tmp::mysql::r3::VarNodeRepository<int64_t>;
+        try {
+            auto* sess = static_cast<mysqlx::Session*>(session_ptr);
+            if(sess) {
+                Derived repo{sess, dbName, tableName, primaryKeyName};
+                sess->startTransaction();
+                repo.remove(primaryKey);
+                sess->commit();
+            } else {
+                throw std::runtime_error("session_ptr is null.");
+            }
+        } catch(std::exception& e) {
+            tmp::ptr_print_error<decltype(e)&>(e);
+        } catch(...) {
+            std::cerr << "Unknown Exception Occurred." << std::endl;
+        }
+    }
+
+    // 9. メモリ解放
     __attribute__((visibility("default")))
     void destroy_varnode(void* node_ptr) {
         if (node_ptr) {
@@ -156,7 +165,7 @@ extern "C" {
         }
     }
 
-    // 6.a メモリ解放 RDBMS(MySQL X Dev API) のコネクション
+    // 9.a メモリ解放 RDBMS(MySQL X Dev API) のコネクション
     __attribute__((visibility("default")))
     void destroy_session_mysql(void* session)
     {
