@@ -13,8 +13,11 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(PQXX REQUIRED libpqxx)
 pkg_check_modules(PQ REQUIRED libpq)
 
-# MongoDB (pkg-config --cflags --libs libmongocxx に対応)
+# MongoDB
 pkg_check_modules(MONGOCXX REQUIRED libmongocxx)
+
+# base64pp (追加)
+pkg_check_modules(BASE64PP REQUIRED base64pp)
 
 # --- 共通のコンパイルオプション定義 ---
 set(COMMON_COMPILE_OPTIONS 
@@ -37,11 +40,13 @@ target_include_directories(pqxx_template_test_runner PRIVATE
     inc 
     ${PQXX_INCLUDE_DIRS}
     ${PQ_INCLUDE_DIRS}
+    ${BASE64PP_INCLUDE_DIRS} # 追加
     ${GTEST_INCLUDE_DIRS}
 )
 target_link_libraries(pqxx_template_test_runner PRIVATE 
     ${PQXX_LIBRARIES} 
     ${PQ_LIBRARIES} 
+    ${BASE64PP_LIBRARIES}    # 追加
     GTest::gtest_main 
 )
 target_compile_options(pqxx_template_test_runner PRIVATE ${COMMON_COMPILE_OPTIONS})
@@ -54,35 +59,39 @@ target_include_directories(mysql_template_test_runner PRIVATE
     inc
     /usr/include/mysql-cppconn/ 
     /usr/local/include          
+    ${BASE64PP_INCLUDE_DIRS} # 追加
     ${GTEST_INCLUDE_DIRS}
 )
 target_link_libraries(mysql_template_test_runner PRIVATE 
     mysqlcppconn                
     mysqlcppconnx               
+    ${BASE64PP_LIBRARIES}    # 追加 (-lbase64pp)
     GTest::gtest_main
 )
 target_compile_options(mysql_template_test_runner PRIVATE ${COMMON_COMPILE_OPTIONS})
 target_compile_definitions(mysql_template_test_runner PRIVATE ${COMMON_COMPILE_DEFINITIONS})
 
 
-# 3. MongoDB テストランナー (追加分)
+# 3. MongoDB テストランナー
 add_executable(mongo_template_test_runner src/mongo_template_test.cpp src/VarNode.cpp)
 target_include_directories(mongo_template_test_runner PRIVATE 
     inc
     /usr/local/include/bson-2.1.2/ 
     ${MONGOCXX_INCLUDE_DIRS}
+    ${BASE64PP_INCLUDE_DIRS} # 追加
     ${GTEST_INCLUDE_DIRS}
 )
 target_link_libraries(mongo_template_test_runner PRIVATE 
     ${MONGOCXX_LIBRARIES}
     bson2                          
+    ${BASE64PP_LIBRARIES}    # 追加
     GTest::gtest_main
 )
 target_compile_options(mongo_template_test_runner PRIVATE ${COMMON_COMPILE_OPTIONS})
 target_compile_definitions(mongo_template_test_runner PRIVATE ${COMMON_COMPILE_DEFINITIONS})
 
 
-# 4. ObjectPool 単体テストランナー (今回追加)
+# 4. ObjectPool 単体テストランナー
 add_executable(object_pool_test_runner src/object_pool_test.cpp)
 target_include_directories(object_pool_test_runner PRIVATE 
     inc 
@@ -99,23 +108,22 @@ target_compile_definitions(object_pool_test_runner PRIVATE ${COMMON_COMPILE_DEFI
 add_executable(varnode_test_runner src/varnode_test.cpp src/VarNode.cpp)
 target_include_directories(varnode_test_runner PRIVATE 
     inc 
+    ${BASE64PP_INCLUDE_DIRS} # 追加
     ${GTEST_INCLUDE_DIRS}
 )
 target_link_libraries(varnode_test_runner PRIVATE 
+    ${BASE64PP_LIBRARIES}    # 追加
     GTest::gtest_main 
 )
 target_compile_options(varnode_test_runner PRIVATE ${COMMON_COMPILE_OPTIONS})
 target_compile_definitions(varnode_test_runner PRIVATE ${COMMON_COMPILE_DEFINITIONS})
 
 # --- 共有ライブラリの定義 ---
-# Panama (Java) からロードするためのブリッジライブラリ
 add_library(varnode_bridge SHARED 
     src/VarNode.cpp 
-    src/bridge.cpp   # ← 今後作成する C 形式のインターフェース層
+    src/bridge.cpp
 )
 
-# 共有ライブラリに必要な依存関係をリンク
-# (既存のDBドライバをすべて集約、または必要なものに絞る)
 target_link_libraries(varnode_bridge PRIVATE 
     ${PQXX_LIBRARIES} 
     ${PQ_LIBRARIES} 
@@ -123,9 +131,9 @@ target_link_libraries(varnode_bridge PRIVATE
     mysqlcppconnx
     ${MONGOCXX_LIBRARIES}
     bson2
+    ${BASE64PP_LIBRARIES}    # 追加
 )
 
-# インクルードパスの設定
 target_include_directories(varnode_bridge PRIVATE 
     inc
     /usr/include/mysql-cppconn/
@@ -133,15 +141,13 @@ target_include_directories(varnode_bridge PRIVATE
     ${PQXX_INCLUDE_DIRS}
     ${PQ_INCLUDE_DIRS}
     ${MONGOCXX_INCLUDE_DIRS}
+    ${BASE64PP_INCLUDE_DIRS} # 追加
 )
 
-# 共通オプションの適用
 target_compile_options(varnode_bridge PRIVATE ${COMMON_COMPILE_OPTIONS})
 target_compile_definitions(varnode_bridge PRIVATE ${COMMON_COMPILE_DEFINITIONS})
 
-# シンボルの隠蔽設定 (エクスポート対象以外を隠す)
 set_target_properties(varnode_bridge PROPERTIES
     CXX_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN ON
 )
-

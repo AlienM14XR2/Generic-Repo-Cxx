@@ -12,7 +12,8 @@ using ValueType = std::variant<
     float,
     double,
     bool,
-    std::string
+    std::string,
+    std::vector<uint8_t>  // バイナリデータ保持用に追加
 >;
 
 // 次のテーブルを用意する。
@@ -36,11 +37,32 @@ VALUES
 // バイナリ型の確認用
 ALTER TABLE fulltype ADD COLUMN raw_data VARBINARY(256) AFTER col_double;
 
+// JSON ライブラリ（nlohmann）のインストール
+e.g. 
+```
+sudo apt install nlohmann-json3-dev
+```
+// インストール状況の確認
+```
+find / -name 'nlohmann*' 2>/dev/null
+```
+
+// Base64 エンコードライブラリのインストール
+```
+cd ~/tmp/
+git clone https://github.com/matheusgomes28/base64pp.git
+cd base64pp
+mkdir build
+cd build
+cmake ..
+make
+sudo make install
+```
  * 
  * 
  * e.g. compile
  * 実験、サンプリングでは以下を推奨（-Wextra があると簡単に関数内をすべてコメントとかできないから。
- * g++ -O3 -std=c++20 -DDEBUG -pedantic-errors -Wall -Werror -I../inc/ -I/usr/include/mysql-cppconn/ -L/usr/lib/x86_64-linux-gnu/ study_mysql_a.cpp VarNode.cpp -lmysqlcppconn -lmysqlcppconnx -o ../bin/study_mysql_a
+ * g++ -O3 -std=c++20 -DDEBUG -pedantic-errors -Wall -Werror -I../inc/ -I/usr/include/mysql-cppconn/ -L/usr/lib/x86_64-linux-gnu/ study_mysql_a.cpp VarNode.cpp -lmysqlcppconn -lmysqlcppconnx -lbase64pp -o ../bin/study_mysql_a
  */
 #include <iostream>
 #include <mysql_template.hpp>
@@ -61,6 +83,11 @@ int test_FindById(const uint64_t& _id)
         std::optional<Data> node = repo.findById(_id);
         if(!node) throw std::runtime_error("Unexpected case.");
         else tmp::debug_print_varnode(&(node.value()));
+        if(node) {
+            nlohmann::json j;
+            tmp::to_json(j, node.value());
+            std::cout << j.dump(4) << std::endl;
+        }
         return EXIT_SUCCESS;
     } catch(std::exception& e) {
         tmp::ptr_print_error<decltype(e)&>(e);

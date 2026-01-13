@@ -6,6 +6,8 @@
 #include <iostream>
 #include <memory>
 #include <vector>
+#include <nlohmann/json.hpp>
+#include <base64pp.h>
 
 namespace tmp {
 
@@ -223,6 +225,39 @@ inline void debug_print_varnode(const VarNode* const _node, std::ostream& os = s
     for (const auto& child : _node->children) {
         debug_print_varnode(child.get(), os, indent + 1);
     }
+}
+
+inline void to_json(nlohmann::json& _json, const VarNode& _node) {
+	nlohmann::json tmp = nlohmann::json::object(); // 明示的にオブジェクト化
+    for (const auto& child : _node.children) {
+        if (!child->children.empty()) {
+            // 子がさらに孫を持っている場合：再帰的にオブジェクトを作成
+            to_json(tmp[child->key], *child);
+        } else {
+            // std::visit のラムダ式内で、全ての型を明示的に処理する
+            std::visit([&](auto&& arg) {
+                using T = std::decay_t<decltype(arg)>;
+                if constexpr (std::is_same_v<T, std::monostate>) {
+                    // ignore
+                } else if constexpr (std::is_same_v<T, bool>) {
+                    tmp[child.get()->key] = (arg ? "true" : "false");
+                // この分岐は冗長に思うかもしれないが、現状はキープする
+                } else if constexpr (std::is_same_v<T, int64_t> || 
+                                    std::is_same_v<T, uint64_t> ||
+                                    std::is_same_v<T, float> ||
+                                    std::is_same_v<T, double> ||
+                                    std::is_same_v<T, std::string>) {
+                    tmp[child.get()->key] = arg;
+                } else if constexpr (std::is_same_v<T, std::vector<uint8_t>>) {
+                    // base64pp を使用したエンコード
+                    tmp[child.get()->key] = base64pp::encode(arg);
+                } else {
+                    // ignore
+                }
+            }, child.get()->data);
+        }
+    }
+    _json = std::move(tmp);
 }
 
 // Type Erasure パターンを利用したリポジトリの設計。
