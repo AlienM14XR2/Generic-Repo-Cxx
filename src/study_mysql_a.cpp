@@ -197,7 +197,7 @@ int main()
         assert(ret == 0);
         tmp::print_debug("Play and Result ... ", ret = test_update(&id));
         assert(ret == 0);
-        tmp::print_debug("Play and Result ... ", ret = test_FindById(id));
+        tmp::print_debug("Play and Result ... ", ret = test_FindById(1L));
         assert(ret == 0);
         tmp::print_debug("Play and Result ... ", ret = test_remove(&id));
         assert(ret == 0);

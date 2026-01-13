@@ -238,7 +238,8 @@ inline void to_json(nlohmann::json& _json, const VarNode& _node) {
             std::visit([&](auto&& arg) {
                 using T = std::decay_t<decltype(arg)>;
                 if constexpr (std::is_same_v<T, std::monostate>) {
-                    // ignore
+                    // NULL の場合は nullptr を代入し、JSON の null を出力する
+                    tmp[child->key] = nullptr;
                 } else if constexpr (std::is_same_v<T, bool>) {
                     tmp[child.get()->key] = (arg ? "true" : "false");
                 // この分岐は冗長に思うかもしれないが、現状はキープする
