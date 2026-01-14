@@ -86,7 +86,12 @@ int test_FindById(const uint64_t& _id)
         if(node) {
             nlohmann::json j;
             tmp::to_json(j, node.value());
-            std::cout << j.dump(4) << std::endl;
+            // std::cout << j.dump(4) << std::endl;
+            tmp::print_debug("json: ", j.dump(4));
+            // tmp::from_json() の確認
+            Data node2 = Data{"__ROOT__NODE2__", std::monostate{}};
+            tmp::from_json(j, node2);
+            tmp::debug_print_varnode(&node2);
         }
         return EXIT_SUCCESS;
     } catch(std::exception& e) {
@@ -197,7 +202,8 @@ int main()
         assert(ret == 0);
         tmp::print_debug("Play and Result ... ", ret = test_update(&id));
         assert(ret == 0);
-        tmp::print_debug("Play and Result ... ", ret = test_FindById(1L));
+        // tmp::print_debug("Play and Result ... ", ret = test_FindById(1L));
+        tmp::print_debug("Play and Result ... ", ret = test_FindById(id));
         assert(ret == 0);
         tmp::print_debug("Play and Result ... ", ret = test_remove(&id));
         assert(ret == 0);

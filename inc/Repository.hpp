@@ -227,31 +227,66 @@ inline void debug_print_varnode(const VarNode* const _node, std::ostream& os = s
     }
 }
 
+// inline void to_json(nlohmann::json& _json, const VarNode& _node) {
+// 	nlohmann::json tmp = nlohmann::json::object(); // 明示的にオブジェクト化
+//     for (const auto& child : _node.children) {
+//         if (!child->children.empty()) {
+//             // 子がさらに孫を持っている場合：再帰的にオブジェクトを作成
+//             to_json(tmp[child->key], *child);
+//         } else {
+//             // std::visit のラムダ式内で、全ての型を明示的に処理する
+//             std::visit([&](auto&& arg) {
+//                 using T = std::decay_t<decltype(arg)>;
+//                 if constexpr (std::is_same_v<T, std::monostate>) {
+//                     // NULL の場合は nullptr を代入し、JSON の null を出力する
+//                     tmp[child.get()->key] = nullptr;
+//                 } else if constexpr (std::is_same_v<T, bool>) {
+//                     tmp[child.get()->key] = (arg ? "true" : "false");
+//                 // この分岐は冗長に思うかもしれないが、現状はキープする
+//                 } else if constexpr (std::is_same_v<T, int64_t> || 
+//                                     std::is_same_v<T, uint64_t> ||
+//                                     std::is_same_v<T, float> ||
+//                                     std::is_same_v<T, double> ||
+//                                     std::is_same_v<T, std::string>) {
+//                     tmp[child.get()->key] = arg;
+//                 } else if constexpr (std::is_same_v<T, std::vector<uint8_t>>) {
+//                     // base64pp を使用したエンコード
+//                     tmp[child.get()->key] = base64pp::encode(arg);
+//                 } else {
+//                     // ignore
+//                 }
+//             }, child.get()->data);
+//         }
+//     }
+//     _json = std::move(tmp);
+// }
+
 inline void to_json(nlohmann::json& _json, const VarNode& _node) {
-	nlohmann::json tmp = nlohmann::json::object(); // 明示的にオブジェクト化
+    nlohmann::json tmp = nlohmann::json::object();
     for (const auto& child : _node.children) {
         if (!child->children.empty()) {
-            // 子がさらに孫を持っている場合：再帰的にオブジェクトを作成
             to_json(tmp[child->key], *child);
         } else {
-            // std::visit のラムダ式内で、全ての型を明示的に処理する
             std::visit([&](auto&& arg) {
                 using T = std::decay_t<decltype(arg)>;
+                auto& item = tmp[child.get()->key];
+
                 if constexpr (std::is_same_v<T, std::monostate>) {
-                    // NULL の場合は nullptr を代入し、JSON の null を出力する
-                    tmp[child->key] = nullptr;
+                    item = nullptr;
                 } else if constexpr (std::is_same_v<T, bool>) {
-                    tmp[child.get()->key] = (arg ? "true" : "false");
-                // この分岐は冗長に思うかもしれないが、現状はキープする
-                } else if constexpr (std::is_same_v<T, int64_t> || 
-                                    std::is_same_v<T, uint64_t> ||
-                                    std::is_same_v<T, float> ||
-                                    std::is_same_v<T, double> ||
-                                    std::is_same_v<T, std::string>) {
-                    tmp[child.get()->key] = arg;
+                    item = nlohmann::json::array({"bool", arg});
+                } else if constexpr (std::is_same_v<T, int64_t>) {
+                    item = nlohmann::json::array({"int64", arg});
+                } else if constexpr (std::is_same_v<T, uint64_t>) {
+                    item = nlohmann::json::array({"uint64", arg});
+                } else if constexpr (std::is_same_v<T, float>) {
+                    item = nlohmann::json::array({"float", arg});
+                } else if constexpr (std::is_same_v<T, double>) {
+                    item = nlohmann::json::array({"double", arg});
+                } else if constexpr (std::is_same_v<T, std::string>) {
+                    item = nlohmann::json::array({"string", arg});
                 } else if constexpr (std::is_same_v<T, std::vector<uint8_t>>) {
-                    // base64pp を使用したエンコード
-                    tmp[child.get()->key] = base64pp::encode(arg);
+                    item = nlohmann::json::array({"binary", base64pp::encode(arg)});
                 } else {
                     // ignore
                 }
@@ -259,6 +294,42 @@ inline void to_json(nlohmann::json& _json, const VarNode& _node) {
         }
     }
     _json = std::move(tmp);
+}
+
+// 修正案
+inline void from_json(const nlohmann::json& _json, VarNode& _node) {
+    for (auto& [key, value] : _json.items()) {
+        if (value.is_null()) {
+            _node.addChild(key, std::monostate{});
+        } 
+        else if (value.is_object()) {
+            VarNode* childNode = _node.addChild(key, std::monostate{});
+            from_json(value, *childNode);
+        } 
+        else if (value.is_array() && value.size() == 2) {
+            // 配列の 0番目から型名を取得
+            std::string type = value.at(0).get<std::string>(); 
+
+            if (type == "int64") {
+                _node.addChild(key, value.at(1).get<int64_t>());
+            } else if (type == "uint64") {
+                _node.addChild(key, value.at(1).get<uint64_t>());
+            } else if (type == "float") {
+                _node.addChild(key, value.at(1).get<float>());
+            } else if (type == "double") {
+                _node.addChild(key, value.at(1).get<double>());
+            } else if (type == "bool") {
+                _node.addChild(key, value.at(1).get<bool>());
+            } else if (type == "string") {
+                _node.addChild(key, value.at(1).get<std::string>());
+            } else if (type == "binary") {
+                std::string base64_str = value.at(1).get<std::string>();
+                auto decoded_data = base64pp::decode(base64_str);
+                if(decoded_data) _node.addChild(key, decoded_data.value());
+                else _node.addChild(key, std::monostate{});
+            }
+        }
+    }
 }
 
 // Type Erasure パターンを利用したリポジトリの設計。
