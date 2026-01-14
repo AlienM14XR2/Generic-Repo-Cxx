@@ -155,7 +155,57 @@ extern "C" {
             std::cerr << "Unknown Exception Occurred." << std::endl;
         }
     }
-    // 7. Find 処理
+
+    // 7. Find 処理 RDBMS(MySQL X Dev API)
+    __attribute__((visibility("default")))
+    char* find_varnode_mysql(void* session_ptr, const int64_t primaryKey, const char* dbName, const char* tableName)
+    {
+        using Derived = tmp::mysql::r3::VarNodeRepository<int64_t>;
+        try {
+            auto* sess = static_cast<mysqlx::Session*>(session_ptr);
+            if(sess) {
+                Derived repo{sess, dbName, tableName, primaryKeyName};
+                sess->startTransaction();
+                std::optional<tmp::VarNode> data = repo.findById(primaryKey);
+                sess->commit();
+                if(data) {
+                    nlohmann::json j;
+                    tmp::to_json(j, data.value());
+                    std::string* result = new std::string(j.dump());
+                    // return result;
+                    return const_cast<char*>(result->c_str());
+                    // return const_cast<char*>(j.dump().c_str());
+                    // return j.dump().c_str();
+                }
+                return nullptr;
+            } else {
+                throw std::runtime_error("session_ptr is null.");
+            }
+        } catch(std::exception& e) {
+            tmp::ptr_print_error<decltype(e)&>(e);
+        } catch(...) {
+            std::cerr << "Unknown Exception Occurred." << std::endl;
+        }
+        return nullptr;
+    }
+
+    // 7.a サイズ計算
+    __attribute__((visibility("default")))
+    size_t find_result_size(char* str_ptr)
+    {
+        try {
+            if(str_ptr) {
+                std::string tmp = std::string(str_ptr);
+                return tmp.size();
+            }
+        } catch(std::exception& e) {
+            tmp::ptr_print_error<decltype(e)&>(e);
+        } catch(...) {
+            std::cerr << "Unknown Exception Occurred." << std::endl;
+        }
+        return 0UL;
+    }
+
     // 8. Remove 処理 RDBMS(MySQL X Dev API)
     __attribute__((visibility("default")))
     void remove_varnode_mysql(void* session_ptr, const int64_t primaryKey, const char* dbName, const char* tableName)
@@ -192,6 +242,15 @@ extern "C" {
     {
         if(session) {
             delete static_cast<mysqlx::Session*>(session);
+        }
+    }
+
+    // 9.a メモリ解放 char* ... @see find_varnode_xxx()
+    __attribute__((visibility("default")))
+    void destroy_string(char* str_ptr)
+    {
+        if(str_ptr) {
+            delete static_cast<char*>(str_ptr);
         }
     }
 }
