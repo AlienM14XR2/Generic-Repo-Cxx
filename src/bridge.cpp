@@ -133,7 +133,28 @@ extern "C" {
         }
     }
 
-    // 6. Update 処理 
+    // 6. Update 処理 RDBMS(MySQL X Dev API)
+    __attribute__((visibility("default")))
+    void update_varnode_mysql(void* session_ptr, void* node_ptr, const int64_t primaryKey, const char* dbName, const char* tableName)
+    {
+        using Derived = tmp::mysql::r3::VarNodeRepository<int64_t>;
+        try {
+            auto* sess = static_cast<mysqlx::Session*>(session_ptr);
+            auto* node = static_cast<tmp::VarNode*>(node_ptr);
+            if(sess && node) {
+                Derived repo{sess, dbName, tableName, primaryKeyName};
+                sess->startTransaction();
+                repo.update(primaryKey, std::move(*node));
+                sess->commit();
+            } else {
+                throw std::runtime_error("session_ptr or node_ptr is null.");
+            }
+        } catch(std::exception& e) {
+            tmp::ptr_print_error<decltype(e)&>(e);
+        } catch(...) {
+            std::cerr << "Unknown Exception Occurred." << std::endl;
+        }
+    }
     // 7. Find 処理
     // 8. Remove 処理 RDBMS(MySQL X Dev API)
     __attribute__((visibility("default")))
