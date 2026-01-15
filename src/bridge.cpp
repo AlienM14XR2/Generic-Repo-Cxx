@@ -5,6 +5,10 @@
  * e.g. cmake コマンド
  * mkdir build && cd build
  * cmake ..
+ * // リリースなら
+ * // cmake .. -DCMAKE_BUILD_TYPE=Release
+ * // デバッグなら
+ * // cmake .. -DCMAKE_BUILD_TYPE=Debug
  * make varnode_bridge
  */
 #include "Repository.hpp" // 既存のヘッダ
@@ -156,9 +160,9 @@ extern "C" {
         }
     }
 
-    // 7. Find 処理 RDBMS(MySQL X Dev API)
+    // 7. Find 処理 RDBMS(MySQL X Dev API)（修正：std::string* をそのまま返す）
     __attribute__((visibility("default")))
-    char* find_varnode_mysql(void* session_ptr, const int64_t primaryKey, const char* dbName, const char* tableName)
+    void* find_varnode_mysql(void* session_ptr, const int64_t primaryKey, const char* dbName, const char* tableName)
     {
         using Derived = tmp::mysql::r3::VarNodeRepository<int64_t>;
         try {
@@ -171,11 +175,8 @@ extern "C" {
                 if(data) {
                     nlohmann::json j;
                     tmp::to_json(j, data.value());
-                    std::string* result = new std::string(j.dump());
-                    // return result;
-                    return const_cast<char*>(result->c_str());
-                    // return const_cast<char*>(j.dump().c_str());
-                    // return j.dump().c_str();
+                    return new std::string(j.dump());
+                    // return const_cast<char*>(result->c_str());
                 }
                 return nullptr;
             } else {
@@ -189,13 +190,22 @@ extern "C" {
         return nullptr;
     }
 
-    // 7.a サイズ計算
+    // 7.a 文字列ポインタの取得（Java側で中身を読む用）
     __attribute__((visibility("default")))
-    size_t find_result_size(char* str_ptr)
+    const char* get_cstr(void* str_ptr) {
+        if(str_ptr) {
+            return static_cast<std::string*>(str_ptr)->c_str();
+        }
+        return nullptr;
+    }
+
+    // 7.b サイズ計算
+    __attribute__((visibility("default")))
+    size_t cstr_size(char* cstr_ptr)
     {
         try {
-            if(str_ptr) {
-                std::string tmp = std::string(str_ptr);
+            if(cstr_ptr) {
+                std::string tmp = std::string(cstr_ptr);
                 return tmp.size();
             }
         } catch(std::exception& e) {
@@ -245,12 +255,11 @@ extern "C" {
         }
     }
 
-    // 9.a メモリ解放 char* ... @see find_varnode_xxx()
+    // 9.b メモリ解放（修正：std::stringとして解体）
     __attribute__((visibility("default")))
-    void destroy_string(char* str_ptr)
-    {
+    void destroy_string(void* str_ptr) {
         if(str_ptr) {
-            delete static_cast<char*>(str_ptr);
+            delete static_cast<std::string*>(str_ptr);
         }
     }
 }
