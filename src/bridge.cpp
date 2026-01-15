@@ -112,6 +112,26 @@ extern "C" {
         }
     }
 
+    // 4.a RDBMS(MySQL X Dev API) トランザクション開始
+    __attribute__((visibility("default")))
+    void begin_tx_mysql(void* session_ptr)
+    {
+        if(session_ptr) {
+           auto* sess = static_cast<mysqlx::Session*>(session_ptr);
+           sess->startTransaction();
+        }
+    }
+
+    // 4.b RDBMS(MySQL X Dev API) コミット
+    __attribute__((visibility("default")))
+    void commit_tx_mysql(void* session_ptr)
+    {
+        if(session_ptr) {
+           auto* sess = static_cast<mysqlx::Session*>(session_ptr);
+           sess->commit();
+        }
+    }
+
     // 5. Insert 処理 RDBMS(MySQL X Dev API)
     __attribute__((visibility("default")))
     int64_t insert_varnode_mysql(void* session_ptr, void* node_ptr, const char* dbName, const char* tableName)
@@ -122,9 +142,7 @@ extern "C" {
             auto* node = static_cast<tmp::VarNode*>(node_ptr);
             if(sess && node) {
                 Derived repo{sess, dbName, tableName, primaryKeyName};
-                sess->startTransaction();
                 int64_t id = repo.insert(std::move(*node));
-                sess->commit();
                 return id;
             }
             return 0L;
@@ -147,9 +165,7 @@ extern "C" {
             auto* node = static_cast<tmp::VarNode*>(node_ptr);
             if(sess && node) {
                 Derived repo{sess, dbName, tableName, primaryKeyName};
-                sess->startTransaction();
                 repo.update(primaryKey, std::move(*node));
-                sess->commit();
             } else {
                 throw std::runtime_error("session_ptr or node_ptr is null.");
             }
@@ -169,14 +185,11 @@ extern "C" {
             auto* sess = static_cast<mysqlx::Session*>(session_ptr);
             if(sess) {
                 Derived repo{sess, dbName, tableName, primaryKeyName};
-                sess->startTransaction();
                 std::optional<tmp::VarNode> data = repo.findById(primaryKey);
-                sess->commit();
                 if(data) {
                     nlohmann::json j;
                     tmp::to_json(j, data.value());
                     return new std::string(j.dump());
-                    // return const_cast<char*>(result->c_str());
                 }
                 return nullptr;
             } else {
@@ -201,12 +214,11 @@ extern "C" {
 
     // 7.b サイズ計算
     __attribute__((visibility("default")))
-    size_t cstr_size(char* cstr_ptr)
+    size_t cstr_size(void* str_ptr)
     {
         try {
-            if(cstr_ptr) {
-                std::string tmp = std::string(cstr_ptr);
-                return tmp.size();
+            if(str_ptr) {
+                return static_cast<std::string*>(str_ptr)->size();
             }
         } catch(std::exception& e) {
             tmp::ptr_print_error<decltype(e)&>(e);
@@ -225,9 +237,7 @@ extern "C" {
             auto* sess = static_cast<mysqlx::Session*>(session_ptr);
             if(sess) {
                 Derived repo{sess, dbName, tableName, primaryKeyName};
-                sess->startTransaction();
                 repo.remove(primaryKey);
-                sess->commit();
             } else {
                 throw std::runtime_error("session_ptr is null.");
             }
