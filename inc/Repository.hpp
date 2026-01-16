@@ -141,6 +141,24 @@ struct VarNode
         children.push_back(std::make_unique<VarNode>(_key, _data, this));
         return children.back().get();
     }
+    VarNode* addChild(std::unique_ptr<VarNode> child)
+    // VarNode* addChild(VarNode* child)
+    {
+        if (!child) return nullptr;
+        // 同一キーのノードが既に存在する場合の処理
+        auto it = std::ranges::find_if(children, 
+                            [&](const auto& c){
+                                return c->key == child->key;
+                            });
+        
+        child->parent = this; // 親ポインタを更新
+        if (it != children.end()) {
+            *it = std::move(child); // 上書き
+            return it->get();
+        }
+        children.push_back(std::move(child));
+        return children.back().get();
+    }
     // const 修飾による関数のオーバーロードあり。本メンバ関数はconst 修飾なし。
     VarNode* getChild(const std::string& _key)
     {
@@ -164,6 +182,33 @@ struct VarNode
     }
 
 };  // VarNode
+
+// 呼出側が delete (または適切な外部メモリ解放) を行う責任を持つ
+inline VarNode* new_deep_copy_varnode(const VarNode* const node)
+{
+    if (node == nullptr) {
+        return nullptr;
+    }
+    // 1. ヒープ上に新しいノードを確保
+    VarNode* newNode = new VarNode(node->key, node->data);
+    try {
+        // 2. 子ノードを再帰的にコピー
+        for (const auto& child : node->children) {
+            // 再帰呼び出しの結果（生ポインタ）を得る
+            VarNode* newChildPtr = new_deep_copy_varnode(child.get());
+            if (newChildPtr) {
+                // unique_ptr を受け取る addChild オーバーロードを利用する場合、
+                // 生ポインタを一度 unique_ptr に包んで所有権を移譲する
+                newNode->addChild(std::unique_ptr<VarNode>(newChildPtr));
+            }
+        }
+    } catch (...) {
+        // 例外発生時のメモリリーク防止（再帰中でのエラー対応）
+        delete newNode;
+        throw std::runtime_error("Unexcected Error ... in new_deep_copy_varnode function.");
+    }
+    return newNode;
+}
 
 template <typename T>
 inline std::optional<T> get_value_safely_optional(const VarNode* const node)

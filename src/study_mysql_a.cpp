@@ -72,6 +72,55 @@ constexpr std::string tableName = "fulltype";
 constexpr std::string primaryKeyName = "id";
 
 
+int test_VarNode_Deep_Copy()
+{
+    puts("------ test_VarNode_Deep_Copy");
+    using Data = tmp::VarNode;
+    Data* cpy = nullptr;
+    try {
+        Data root{"_ROOT_KEY_", std::monostate{}};
+        std::string email = "derek@loki.org";
+        Data* nodeEmail = root.addChild("email", email);
+        // nodeEmail 用のブロック
+        {
+            std::string companyId{"B3_1000"};
+            nodeEmail->addChild("company_id", companyId);
+            std::string password{"derek1111"};
+            nodeEmail->addChild("password", password);
+            std::string name{"Derek"};
+            nodeEmail->addChild("name", name);
+        }
+        std::string memo = "Baseball player, PG";
+        root.addChild("memo", memo);
+        uint64_t age = 30ul;
+        root.addChild("age", age);
+        bool on_busy = false;
+        root.addChild("on_busy", on_busy);
+        float col_float = 3.14;
+        root.addChild("col_float", col_float);
+        float col_double = 35.6809591;
+        root.addChild("col_double", col_double);
+        std::vector<uint8_t> raw_data;
+        raw_data.push_back('a');raw_data.push_back('1');raw_data.push_back('b');raw_data.push_back('2');
+        root.addChild("raw_data", raw_data);
+        // ディープコピ前の確認
+        puts("original ...");
+        tmp::debug_print_varnode(&root);
+        cpy = tmp::new_deep_copy_varnode(&root);
+        puts("deep copy ...");
+        tmp::debug_print_varnode(cpy);
+        if(cpy) {
+            delete cpy;
+            cpy=nullptr;
+        }
+        return EXIT_SUCCESS;
+    } catch(std::exception& e) {
+        if(cpy) delete cpy;
+        tmp::ptr_print_error<decltype(e)&>(e);
+        return EXIT_FAILURE;
+    }
+}
+
 int test_FindById(const uint64_t& _id)
 {
     puts("------ test_FindById");
@@ -194,7 +243,7 @@ int main()
 {
     puts("START main ===");
     int ret = -1;
-    if(1) {
+    if(0) {
         // tmp::print_debug("Play and Result ... ", ret = test_FindById(1));
         // assert(ret == 0);
         uint64_t id = 0;
@@ -206,6 +255,10 @@ int main()
         tmp::print_debug("Play and Result ... ", ret = test_FindById(id));
         assert(ret == 0);
         tmp::print_debug("Play and Result ... ", ret = test_remove(&id));
+        assert(ret == 0);
+    }
+    if(1) {
+        tmp::print_debug("Play and Result ... ", ret = test_VarNode_Deep_Copy());
         assert(ret == 0);
     }
     puts("=== main END");
