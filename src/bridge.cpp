@@ -19,6 +19,14 @@
 
 constexpr std::string primaryKeyName = "id";
 
+void b_destroy_varnode(void* node_ptr)
+{
+    if (node_ptr) {
+        delete static_cast<tmp::VarNode*>(node_ptr);
+        node_ptr = nullptr;
+    }
+}
+
 // 名前修飾を防ぎ、外部から見えるように定義
 extern "C" {
 
@@ -140,9 +148,13 @@ extern "C" {
         try {
             auto* sess = static_cast<mysqlx::Session*>(session_ptr);
             auto* node = static_cast<tmp::VarNode*>(node_ptr);
+            printf("node_ptr: \t%p\n", node_ptr);
+            printf("node:     \t%p\n", (void*)node);
             if(sess && node) {
                 Derived repo{sess, dbName, tableName, primaryKeyName};
                 int64_t id = repo.insert(std::move(*node));
+                // 利用したnode はここで明示的に破棄する（ムーブセマンティクスを利用しているため、引き続き利用する方が危険であるため）。
+                b_destroy_varnode(node_ptr);
                 return id;
             }
             return 0L;
@@ -166,6 +178,8 @@ extern "C" {
             if(sess && node) {
                 Derived repo{sess, dbName, tableName, primaryKeyName};
                 repo.update(primaryKey, std::move(*node));
+                // 利用したnode はここで明示的に破棄する（ムーブセマンティクスを利用しているため、引き続き利用する方が危険であるため）。
+                b_destroy_varnode(node_ptr);
             } else {
                 throw std::runtime_error("session_ptr or node_ptr is null.");
             }
@@ -251,9 +265,7 @@ extern "C" {
     // 9. メモリ解放
     __attribute__((visibility("default")))
     void destroy_varnode(void* node_ptr) {
-        if (node_ptr) {
-            delete static_cast<tmp::VarNode*>(node_ptr);
-        }
+        b_destroy_varnode(node_ptr);
     }
 
     // 9.a メモリ解放 RDBMS(MySQL X Dev API) のコネクション
