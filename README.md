@@ -18,6 +18,32 @@
    - 複雑なインフラストラクチャの違いを抽象化する設計アプローチ。
    - 広範なデータベース知識の応用。
 
+### 依存ライブラリ（RDBMS, NoSQL）
+- @see ./inc/mysql_template.hpp
+- @see ./inc/pqxx_template.hpp
+- @see ./inc/mongo_template.hpp
+
+### 依存ライブラリ（RDBMS, NoSQL 以外）
+JSON ライブラリ（nlohmann）のインストール
+```
+sudo apt install nlohmann-json3-dev
+```
+インストール状況の確認
+```
+find / -name 'nlohmann*' 2>/dev/null
+```
+Base64 エンコードライブラリのインストール
+```
+cd ~/tmp/
+git clone https://github.com/matheusgomes28/base64pp.git
+cd base64pp
+mkdir build
+cd build
+cmake ..
+make
+sudo make install
+```
+
 ### CMAKE
 ```
 mkdir build
