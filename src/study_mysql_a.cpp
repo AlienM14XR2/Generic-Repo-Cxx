@@ -159,7 +159,10 @@ int test_insert(uint64_t* _id)
         Data root{"_ROOT_KEY_", rval};
         std::string email = "derek@loki.org";
         root.addChild("email", email);
-        std::string memo = "Baseball player, PG";
+        // Latin 1 ではテストデータとして不十分だった。
+        // std::string memo = "Baseball player, PG";
+        // MySQL CLI 上では文字化け（不明）となるが、正しく復元できるので実は問題ではない。
+        std::string memo = "ベースボールプレイヤー,PG";
         root.addChild("memo", memo);
         uint64_t age = 30ul;
         root.addChild("age", age);
@@ -195,7 +198,7 @@ int test_update(uint64_t* _id)
         Data root{"_ROOT_KEY_", rval};
         std::string email = "derek_u@loki.org";
         root.addChild("email", email);
-        std::string memo = "Baseball player, PG, DBA";
+        std::string memo = "ベースボールプレイヤー, PG, DBA";
         root.addChild("memo", memo);
         uint64_t age = 33ul;
         root.addChild("age", age);
@@ -243,7 +246,7 @@ int main()
 {
     puts("START main ===");
     int ret = -1;
-    if(0) {
+    if(1) {
         // tmp::print_debug("Play and Result ... ", ret = test_FindById(1));
         // assert(ret == 0);
         uint64_t id = 0;
@@ -257,7 +260,7 @@ int main()
         tmp::print_debug("Play and Result ... ", ret = test_remove(&id));
         assert(ret == 0);
     }
-    if(1) {
+    if(0) {
         tmp::print_debug("Play and Result ... ", ret = test_VarNode_Deep_Copy());
         assert(ret == 0);
     }

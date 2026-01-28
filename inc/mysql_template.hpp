@@ -40,7 +40,6 @@
  * ```
  * 
  * データベースとテーブルの事前準備
- * ```
  * CREATE DATABASE IF NOT EXISTS test;
  * 
  * DROP TABLE IF EXISTS contractor;
@@ -66,7 +65,28 @@
  * +--------------+------------+--------+
  * | test         | contractor | InnoDB |
  * +--------------+------------+--------+
+ * // テーブル情報
  * ```
+ * SHOW CREATE TABLE contractor;
+ * ```
+ * ## MySQL CLI 文字化け対応
+ * ### ログイン時
+```
+mysql -u root -p --default-character-set=utf8mb4
+```
+ * ### SQL 
+```
+SHOW CREATE TABLE fulltype;
+SET NAMES utf8mb4;
+```
+ * ### 設定ファイル (my.cnf)
+```
+[client]
+default-character-set=utf8mb4
+[mysql]
+default-character-set=utf8mb4
+```
+ * 
  * 
  * MySQL C++ Connector について
  * ```
