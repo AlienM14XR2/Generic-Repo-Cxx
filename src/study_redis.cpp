@@ -249,7 +249,7 @@ int test_insert(const uint64_t& id, const std::string& email)
     }
 }
 
-int test_insert_lua(const uint64_t& id, const std::string& email) {
+int test_insert_lua(const uint64_t& id, const std::string& email, const uint64_t& timeout=3600/** 3600秒（1時間）の有効期限 */) {
     puts("------ test_insert_lua");
     try {
         // Luaスクリプトの定義
@@ -288,6 +288,7 @@ int test_insert_lua(const uint64_t& id, const std::string& email) {
         );
         if (result == 1) {
             std::cout << "Successfully inserted." << std::endl;
+            redis_.expire(contractor_key, std::chrono::seconds(timeout));
         } else {
             std::cout << "Duplicate email found. Insertion aborted." << std::endl;
         }
