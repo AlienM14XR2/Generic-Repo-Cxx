@@ -298,6 +298,38 @@ int test_insert_lua(const uint64_t& id, const std::string& email) {
     }
 }
 
+int test_remove_lua(const uint64_t& id, const std::string& email)
+{
+    puts("------ test_remove_lua");
+    try {
+        const std::string del_script = R"(
+            -- KEYS[1]: contractor:id
+            -- KEYS[2]: contractor:email_to_id
+            -- ARGV[1]: email
+            redis.call('DEL', KEYS[1])
+            return redis.call('HDEL', KEYS[2], ARGV[1])
+        )";
+        const std::string contractor_key = std::format("contractor:{}", id);
+        const std::string index_key = "contractor:email_to_id";
+        // 実行例
+        // std::vector<std::string> keys = {contractor_key, index_key};
+        auto removed = redis_.eval<long long>(
+            del_script,
+            {contractor_key, index_key},    // KEYS
+            {email}                         // ARGV
+        );
+        if(removed == 1) {
+            std::cout << "Successfully removed." << std::endl;
+        } else {
+            std::cout << "Removing aborted." << std::endl;
+        }
+        return EXIT_SUCCESS;
+    } catch(std::exception& e) {
+        tmp::ptr_print_error<decltype(e)&>(e);
+        return EXIT_FAILURE;
+    }
+}
+
 int main()
 {
     puts("START main ===");
@@ -317,7 +349,10 @@ int main()
         uint64_t id2 = 200ul;
         tmp::print_debug("Second attempt (ID:200): ", ret = test_insert_lua(id2, email));
         assert(ret == 0);
-        tmp::print_debug("Play and Result ... ", ret = test_remove(id, email));
+        // tmp::print_debug("Play and Result ... ", ret = test_remove(id, email));
+        tmp::print_debug("Play and Result ... ", ret = test_remove_lua(id, email));
+        assert(ret == 0);
+        tmp::print_debug("Play and Result (2nd)... ", ret = test_remove_lua(id, email));
         assert(ret == 0);
     }
     puts("=== END   main");
