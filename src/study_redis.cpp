@@ -37,6 +37,10 @@ SELECT 1
 127.0.0.1:6379[1]> KEYS *
 127.0.0.1:6379[1]> HGETALL contractor:1
 127.0.0.1:6379[1]> HGET contractor:email_to_id derek@example.com
+# 1. 本体データ（Hash）の削除
+127.0.0.1:6379[1]> DEL contractor:1
+# 2. インデックス（Hash内のフィールド）の削除
+127.0.0.1:6379[1]> HDEL contractor:email_to_id derek@example.com
 ```
  * 
  * 
@@ -245,6 +249,55 @@ int test_insert(const uint64_t& id, const std::string& email)
     }
 }
 
+int test_insert_lua(const uint64_t& id, const std::string& email) {
+    puts("------ test_insert_lua");
+    try {
+        // Luaスクリプトの定義
+        // KEYS[1]: contractor_key, KEYS[2]: index_key
+        // ARGV[1]: email, ARGV[2]: id, ARGV[3...]: data (field, value, ...)
+        const std::string script = R"(
+            if redis.call('HEXISTS', KEYS[2], ARGV[1]) == 1 then
+                return 0
+            end
+            redis.call('HSET', KEYS[1], unpack(ARGV, 3))
+            redis.call('HSET', KEYS[2], ARGV[1], ARGV[2])
+            return 1
+        )";
+        const std::string contractor_key = std::format("contractor:{}", id);
+        const std::string index_key = "contractor:email_to_id";
+        // ARGVの構築（email, id, その後に本体データ）
+        std::vector<std::string> args = {email, std::to_string(id)};
+        std::unordered_map<std::string, std::string> data = {
+            {"company_id", "E1_3000"}, {"email", email}, {"name", "デレク"}
+        };
+        for (const auto& [f, v] : data) {
+            args.push_back(f);
+            args.push_back(v);
+        }
+        // スクリプトの実行
+        // eval(script, keys_iterator, args_iterator)
+        // 第2引数の initializer_list を明示的に記述し、
+        // 第3, 4引数に args のイテレータを渡す
+        std::vector<std::string> keys = {contractor_key, index_key};
+        auto result = redis_.eval<long long>(
+            script, 
+            keys.begin(),  // Key の開始
+            keys.end(),    // Key の終了
+            args.begin(),  // Arg の開始
+            args.end()     // Arg の終了
+        );
+        if (result == 1) {
+            std::cout << "Successfully inserted." << std::endl;
+        } else {
+            std::cout << "Duplicate email found. Insertion aborted." << std::endl;
+        }
+        return EXIT_SUCCESS;
+    } catch (const std::exception& e) {
+        tmp::ptr_print_error<decltype(e)&>(e);
+        return EXIT_FAILURE;
+    }
+}
+
 int main()
 {
     puts("START main ===");
@@ -257,7 +310,13 @@ int main()
         uint64_t id = 1ul;
         // RDBMS におけるユニークキ制約カラム
         std::string email = "derek@example.com";
-        tmp::print_debug("Play and Result ... ", ret = test_insert(id, email));
+        // tmp::print_debug("Play and Result ... ", ret = test_insert(id, email));
+        tmp::print_debug("Play and Result ... ", ret = test_insert_lua(id, email));
+        assert(ret == 0);
+        // 2回目：重複登録（Lua側で拒否され、result: 0 が返るはず... exception にはならない）
+        uint64_t id2 = 200ul;
+        tmp::print_debug("Second attempt (ID:200): ", ret = test_insert_lua(id2, email));
+        assert(ret == 0);
         tmp::print_debug("Play and Result ... ", ret = test_remove(id, email));
         assert(ret == 0);
     }
