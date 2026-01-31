@@ -84,10 +84,12 @@ sudo ldconfig
 #include <memory>
 #include <cassert>
 #include <cxxabi.h>
+#include <format>
 #include <sw/redis++/redis++.h>
 #include <Repository.hpp>
 
 sw::redis::Redis redis_factory();
+// 本テスト環境で利用すべき唯一のRedis オブジェクトと考えてください（意味合いとしては Singleton）。
 sw::redis::Redis redis_ = redis_factory();
 
 sw::redis::Redis redis_factory()
@@ -105,6 +107,7 @@ sw::redis::Redis redis_factory()
         pool_opts.connection_lifetime = std::chrono::minutes(10);
         // redis オブジェクトの作成
         auto redis = sw::redis::Redis(opts, pool_opts);
+        // 疎通確認。
         redis.ping();
         return redis;
     } catch(const sw::redis::Error &e) {
@@ -180,14 +183,37 @@ int test_connect()
     }
 }
 
-int test_insert(const uint64_t& id)
+int test_remove(const uint64_t& id, const std::string& email)
+{
+    puts("------ test_remove");
+    try {
+        const std::string uk_contractor = "contractor" + std::format(":{}", id);
+        // このように記述することで、見えてくるものがあるだろう。RDBMS とは異なるフィールの持ち方等（ユニークキ制約）。
+        const std::string uk_contractor_email_id = "contractor" + std::format(":{}", "email_to_id");
+        // トランザクションオブジェクトの作成
+        auto pipe = redis_.transaction();
+        pipe.del(uk_contractor);
+        pipe.hdel(uk_contractor_email_id, email);
+        auto replies = pipe.exec();
+        for(size_t i = 0; i < replies.size(); i++) {
+            long long result = replies.get<long long>(i);
+            tmp::print_debug("index: ", i, "result: ", result);
+        }
+        return EXIT_SUCCESS;
+    } catch(std::exception& e) {
+        tmp::ptr_print_error<decltype(e)&>(e);
+        return EXIT_FAILURE;
+    }
+}
+
+int test_insert(const uint64_t& id, const std::string& email)
 {
     puts("------ test_insert");
     try {
         // トランザクションオブジェクトの作成
         auto pipe = redis_.transaction();
         // 1. 本体データの登録 (Hash)
-        std::string email = "derek@example.com";
+        // std::string email = "derek@example.com";
         std::unordered_map<std::string, std::string> data = {
             {"company_id", "E1_3000"},
             {"email", email},
@@ -195,16 +221,18 @@ int test_insert(const uint64_t& id)
             {"name", "デレク"},
             {"roles", "Operator"}
         };
-        std::string contractor_key = "contractor:" + std::to_string(id);
+        // key を純粋なテーブル名に一致させた方が都合がよさそうだが。
+        std::string contractor_key = "contractor" + std::format(":{}", id);
         std::string contractor_email_id = "contractor:email_to_id";
         pipe.hset(contractor_key, data.begin(), data.end());
         // 2. ユニーク制約用インデックスの登録
-        pipe.hset(contractor_email_id, email, std::to_string(id));
+        // pipe.hsetnx(contractor_email_id, email, std::format("{}", id));
+        pipe.hset(contractor_email_id, email, std::format("{}", id));
         // 3. 実行（EXECコマンドの発行）
         // 実行結果は各コマンドの戻り値が sw::redis::QueuedReply として返る
         auto replies = pipe.exec();
         for(size_t i = 0; i < replies.size(); i++) {
-            long long result = replies.get<long long>(0);
+            long long result = replies.get<long long>(i);
             tmp::print_debug("index: ", i, "result: ", result);
         }
         return EXIT_SUCCESS;
@@ -227,7 +255,10 @@ int main()
     }
     if(1) {
         uint64_t id = 1ul;
-        tmp::print_debug("Play and Result ... ", ret = test_insert(id));
+        // RDBMS におけるユニークキ制約カラム
+        std::string email = "derek@example.com";
+        tmp::print_debug("Play and Result ... ", ret = test_insert(id, email));
+        tmp::print_debug("Play and Result ... ", ret = test_remove(id, email));
         assert(ret == 0);
     }
     puts("=== END   main");
