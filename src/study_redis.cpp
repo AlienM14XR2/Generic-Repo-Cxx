@@ -330,6 +330,74 @@ int test_remove_lua(const uint64_t& id, const std::string& email)
     }
 }
 
+int test_update_lua(const uint64_t& id, const std::string& email) {
+    puts("------ test_update_lua");
+    try {
+        const std::string update_script = R"(
+            local current_id = redis.call('HGET', KEYS[2], ARGV[1])
+            if current_id and current_id ~= ARGV[2] then
+                return 0
+            end
+            -- 本体更新 (unpackはARGVの3番目から)
+            redis.call('HSET', KEYS[1], unpack(ARGV, 3))
+            -- インデックス更新
+            redis.call('HSET', KEYS[2], ARGV[1], ARGV[2])
+            return 1
+        )";
+        const std::string contractor_key = std::format("contractor:{}", id);
+        const std::string index_key = "contractor:email_to_id";
+        // 引数パッキング
+        std::vector<std::string> args = {email, std::to_string(id)};
+        std::unordered_map<std::string, std::string> data = {
+            {"company_id", "E1_3000_UPDATED"},
+            {"email", email},
+            {"name", "デレク・改"}
+        };
+        for (const auto& [f, v] : data) {
+            args.push_back(f);
+            args.push_back(v);
+        }
+        std::vector<std::string> keys = {contractor_key, index_key};
+        auto result = redis_.eval<long long>(
+            update_script,
+            keys.begin(),  // Key の開始
+            keys.end(),    // Key の終了
+            args.begin(),
+            args.end()
+        );
+        if (result == 1) {
+            std::cout << "Successfully updated." << std::endl;
+        } else {
+            std::cout << "Update aborted: Email already in use by another ID." << std::endl;
+        }
+        return EXIT_SUCCESS;
+    } catch (const std::exception& e) {
+        tmp::ptr_print_error<decltype(e)&>(e);
+        return EXIT_FAILURE;
+    }
+}
+
+int test_read(const uint64_t& id)
+{
+    puts("------ test_read");
+    try {
+        const std::string contractor_key = std::format("contractor:{}", id);
+        // 取得先のコンテナを用意
+        std::unordered_map<std::string, std::string> result;
+        // hgetall(key, output_iterator)
+        // 取得した全フィールドが result に格納される
+        redis_.hgetall(contractor_key, std::inserter(result, result.begin()));
+        // 内容の確認
+        for (const auto& [field, value] : result) {
+            std::cout << field << ": " << value << std::endl;
+        }
+        return EXIT_SUCCESS;
+    } catch(std::exception& e) {
+        tmp::ptr_print_error<decltype(e)&>(e);
+        return EXIT_FAILURE;
+    }
+}
+
 int main()
 {
     puts("START main ===");
@@ -348,6 +416,12 @@ int main()
         // 2回目：重複登録（Lua側で拒否され、result: 0 が返るはず... exception にはならない）
         uint64_t id2 = 200ul;
         tmp::print_debug("Second attempt (ID:200): ", ret = test_insert_lua(id2, email));
+        assert(ret == 0);
+        tmp::print_debug("Play and Result (after insert check) ... ", ret = test_read(id));
+        assert(ret == 0);
+        tmp::print_debug("Play and Result ... ", ret = test_update_lua(id, email));
+        assert(ret == 0);
+        tmp::print_debug("Play and Result (after update check) ... ", ret = test_read(id));
         assert(ret == 0);
         // tmp::print_debug("Play and Result ... ", ret = test_remove(id, email));
         tmp::print_debug("Play and Result ... ", ret = test_remove_lua(id, email));
