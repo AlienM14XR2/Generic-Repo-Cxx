@@ -412,6 +412,21 @@ int test_read(const uint64_t& id)
  * - VarNode を引数、戻値とした簡易テスト関数の実装。
  */
 
+
+ tmp::VarNode createTestData(const uint64_t& id, const std::string& email, const std::string& name)
+{
+    tmp::VarNode root("__root__", std::monostate{});    // Root ノードのKey とValue はなんでもよい（RDBMS NoSQL でも同じ）。
+    root.addChild("table", std::format("{}", "contractor"));
+    root.addChild("pkey", std::format("{}", "id"));
+    root.addChild("ukey", std::format("{}", "email_to_id"));
+    root.addChild("uvalue", std::format("{}", email));
+    tmp::VarNode* data = root.addChild("data_redis", std::monostate{});
+    data->addChild("id", id);
+    data->addChild("email", email);
+    data->addChild("name", name);
+    return root;
+}
+
 int test_redis_VarNode()
 {
     puts("------ test_redis_VarNode ... Redis 特有のデータの持ち方");
@@ -419,17 +434,38 @@ int test_redis_VarNode()
     const std::string email = "derek@example.com";
     const std::string name  = "デレク";
     try {
-        tmp::VarNode root("__root__", std::monostate{});    // Root ノードのKey とValue はなんでもよい（RDBMS NoSQL でも同じ）。
-        root.addChild("table", std::format("{}", "contractor"));
-        root.addChild("pkey", std::format("{}", "id"));
-        root.addChild("ukey", std::format("{}", "email_to_id"));
-        root.addChild("uvalue", std::format("{}", email));
-        tmp::VarNode* data = root.addChild("data_redis", std::monostate{});
-        data->addChild("id", id);
-        data->addChild("email", email);
-        data->addChild("name", name);
+        tmp::VarNode root = createTestData(id, email, name);
         // 出力して目視確認：）
         tmp::debug_print_varnode(&root);
+        // 真面目に比較検証 ... redis 特有の構造
+        tmp::VarNode* table = root.getChild("table");
+        std::string tbl = table->get<std::string>();
+        assert(tbl.compare("contractor") == 0);
+        tmp::VarNode* pkey = root.getChild("pkey");
+        std::string primary = pkey->get<std::string>();
+        assert(primary.compare("id") == 0);
+        tmp::VarNode* ukey = root.getChild("ukey");
+        std::string unique = ukey->get<std::string>();
+        assert(unique.compare("email_to_id") == 0);
+        tmp::VarNode* uvalue = root.getChild("uvalue");
+        std::string uniqueVal = uvalue->get<std::string>();
+        assert(uniqueVal.compare(email) == 0);
+        // data_redis の確認
+        tmp::VarNode* dataRedis = root.getChild("data_redis");
+        for(const auto& child: dataRedis->children ) {
+            if(child->key == "id") {
+                uint64_t actualId = child->get<uint64_t>();
+                assert(actualId == id);
+            }
+            else if(child->key == "email") {
+                std::string actualEmail = child->get<std::string>();
+                assert(actualEmail.compare(email) == 0);
+            }
+            else if(child->key == "name") {
+                std::string actualName = child->get<std::string>();
+                assert(actualName.compare(name) == 0);
+            }
+        }
         return EXIT_SUCCESS;
     } catch(std::exception& e) {
         tmp::ptr_print_error<decltype(e)>(e);
