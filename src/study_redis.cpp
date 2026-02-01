@@ -92,18 +92,18 @@ sudo ldconfig
 #include <sw/redis++/redis++.h>
 #include <Repository.hpp>
 
-sw::redis::Redis redis_factory();
+sw::redis::Redis redis_factory(const int&);
 // 本テスト環境で利用すべき唯一のRedis オブジェクトと考えてください（意味合いとしては Singleton）。
-sw::redis::Redis redis_ = redis_factory();
+sw::redis::Redis redis_ = redis_factory(1);  // ここで DB 1番を選択
 
-sw::redis::Redis redis_factory()
+sw::redis::Redis redis_factory(const int& _db)
 {
     try {
         sw::redis::ConnectionOptions opts;
         opts.host = "127.0.0.1";
         opts.port = 6379;
         opts.password = "pass";
-        opts.db = 1; // ここで DB 1番を選択
+        opts.db = _db;
         opts.socket_timeout = std::chrono::milliseconds(200);
         sw::redis::ConnectionPoolOptions pool_opts;
         pool_opts.size = 3;
@@ -399,6 +399,44 @@ int test_read(const uint64_t& id)
     }
 }
 
+/**
+ * Redis リポジトリに関する考察
+ * 
+ * 他のRDBMS, NoSQL のストレージとの決定的な違いは、Redis を従属的な役割にしている点である。
+ * つまり MySQL + Redis or PostgreSQL + Redis は想定しているが、Redis 単体やRDBMS と主従が
+ * 逆転した関係の運用は考えていなということ。そのようなものが必要になった際はRepository の
+ * 別サブクラスとして設計し直す（現状はこんなところか）。
+ * VarNode はComposite パターンを採用している。
+ * 
+ * - VarNode におけるRedis 特有のデータの保持構造（CUD の更新系で必要）を決定する。
+ * - VarNode を引数、戻値とした簡易テスト関数の実装。
+ */
+
+int test_redis_VarNode()
+{
+    puts("------ test_redis_VarNode ... Redis 特有のデータの持ち方");
+    const uint64_t id = 1;
+    const std::string email = "derek@example.com";
+    const std::string name  = "デレク";
+    try {
+        tmp::VarNode root("__root__", std::monostate{});    // Root ノードのKey とValue はなんでもよい（RDBMS NoSQL でも同じ）。
+        root.addChild("table", std::format("{}", "contractor"));
+        root.addChild("pkey", std::format("{}", "id"));
+        root.addChild("ukey", std::format("{}", "email_to_id"));
+        root.addChild("uvalue", std::format("{}", email));
+        tmp::VarNode* data = root.addChild("data_redis", std::monostate{});
+        data->addChild("id", id);
+        data->addChild("email", email);
+        data->addChild("name", name);
+        // 出力して目視確認：）
+        tmp::debug_print_varnode(&root);
+        return EXIT_SUCCESS;
+    } catch(std::exception& e) {
+        tmp::ptr_print_error<decltype(e)>(e);
+        return EXIT_FAILURE;
+    }
+}
+
 int main()
 {
     puts("START main ===");
@@ -428,6 +466,10 @@ int main()
         tmp::print_debug("Play and Result ... ", ret = test_remove_lua(id, email));
         assert(ret == 0);
         tmp::print_debug("Play and Result (2nd)... ", ret = test_remove_lua(id, email));
+        assert(ret == 0);
+    }
+    if(1) {
+        tmp::print_debug("Play and Result ... ", ret = test_redis_VarNode());
         assert(ret == 0);
     }
     puts("=== END   main");
