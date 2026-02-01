@@ -412,13 +412,21 @@ int test_read(const uint64_t& id)
  * - VarNode を引数、戻値とした簡易テスト関数の実装。
  */
 
-
- tmp::VarNode createTestData(const uint64_t& id, const std::string& email, const std::string& name)
+/**
+ * テストデータの作成
+ * 
+ * table: テーブル名
+ * ukey: redis 用のユニークキ名に使用するワード
+ * id: RDBMS 等で発行されたID
+ * email: RDBMS 等で管理されるユニークな値
+ * name: ID で表現されるデータの別名
+ */
+tmp::VarNode createTestData(const std::string& table, const std::string& ukey, const uint64_t& id, const std::string& email, const std::string& name)
 {
     tmp::VarNode root("__root__", std::monostate{});    // Root ノードのKey とValue はなんでもよい（RDBMS NoSQL でも同じ）。
-    root.addChild("table", std::format("{}", "contractor"));
-    root.addChild("pkey", std::format("{}", "id"));
-    root.addChild("ukey", std::format("{}", "email_to_id"));
+    root.addChild("pkey", std::format("{}:{}", table, id));
+    root.addChild("pvalue", std::format("{}", id));
+    root.addChild("ukey", std::format("{}:{}", table, ukey));
     root.addChild("uvalue", std::format("{}", email));
     tmp::VarNode* data = root.addChild("data_redis", std::monostate{});
     data->addChild("id", id);
@@ -430,41 +438,64 @@ int test_read(const uint64_t& id)
 int test_redis_VarNode()
 {
     puts("------ test_redis_VarNode ... Redis 特有のデータの持ち方");
-    const uint64_t id = 1;
-    const std::string email = "derek@example.com";
-    const std::string name  = "デレク";
+    const std::string TABLE = "contractor";
+    const std::string UKEY  = "email_to_id";
+    const uint64_t    ID    = 1;
+    const std::string EMAIL = "derek@example.com";
+    const std::string NAME  = "デレク";
     try {
-        tmp::VarNode root = createTestData(id, email, name);
+        tmp::VarNode root = createTestData(TABLE, UKEY, ID, EMAIL, NAME);
         // 出力して目視確認：）
         tmp::debug_print_varnode(&root);
         // 真面目に比較検証 ... redis 特有の構造
-        tmp::VarNode* table = root.getChild("table");
-        std::string tbl = table->get<std::string>();
-        assert(tbl.compare("contractor") == 0);
         tmp::VarNode* pkey = root.getChild("pkey");
-        std::string primary = pkey->get<std::string>();
-        assert(primary.compare("id") == 0);
+        std::string redis_pkey = pkey->get<std::string>();
+        assert(redis_pkey.compare(std::format("{}:{}", TABLE, ID)) == 0);
+        tmp::VarNode* pvalue = root.getChild("pvalue");
+        std::string primary = pvalue->get<std::string>();
+        assert(primary.compare(std::to_string(ID)) == 0);
         tmp::VarNode* ukey = root.getChild("ukey");
         std::string unique = ukey->get<std::string>();
-        assert(unique.compare("email_to_id") == 0);
+        assert(unique.compare(std::format("{}:{}", TABLE, UKEY)) == 0);
         tmp::VarNode* uvalue = root.getChild("uvalue");
-        std::string uniqueVal = uvalue->get<std::string>();
-        assert(uniqueVal.compare(email) == 0);
+        std::string unique_value = uvalue->get<std::string>();
+        assert(unique_value.compare(EMAIL) == 0);
         // data_redis の確認
         tmp::VarNode* dataRedis = root.getChild("data_redis");
         for(const auto& child: dataRedis->children ) {
             if(child->key == "id") {
                 uint64_t actualId = child->get<uint64_t>();
-                assert(actualId == id);
+                assert(actualId == ID);
             }
             else if(child->key == "email") {
                 std::string actualEmail = child->get<std::string>();
-                assert(actualEmail.compare(email) == 0);
+                assert(actualEmail.compare(EMAIL) == 0);
             }
             else if(child->key == "name") {
                 std::string actualName = child->get<std::string>();
-                assert(actualName.compare(name) == 0);
+                assert(actualName.compare(NAME) == 0);
             }
+        }
+        return EXIT_SUCCESS;
+    } catch(std::exception& e) {
+        tmp::ptr_print_error<decltype(e)>(e);
+        return EXIT_FAILURE;
+    }
+}
+
+int test_insert_lua(tmp::VarNode&& node)
+{
+    puts("------ test_insert_lua ... VarNode");
+    try {
+        tmp::VarNode* pkey   = node.getChild("pkey");
+        tmp::VarNode* pvalue = node.getChild("pvalue");
+        tmp::VarNode* ukey   = node.getChild("ukey");
+        tmp::VarNode* uvalue = node.getChild("uvalue");
+        tmp::VarNode* data   = node.getChild("data_redis");
+        if(pkey && pvalue && ukey && uvalue && data) {
+            tmp::print_debug("TODO 実装");
+        } else {
+            throw std::runtime_error("NullPointer Exception.");
         }
         return EXIT_SUCCESS;
     } catch(std::exception& e) {
@@ -506,6 +537,13 @@ int main()
     }
     if(1) {
         tmp::print_debug("Play and Result ... ", ret = test_redis_VarNode());
+        assert(ret == 0);
+        const std::string TABLE = "contractor";
+        const std::string UKEY  = "email_to_id";
+        const uint64_t    ID    = 1;
+        const std::string EMAIL = "derek@example.com";
+        const std::string NAME  = "デレク";
+        tmp::print_debug("Play and Result ... ", ret = test_insert_lua(std::move(createTestData(TABLE,UKEY,ID,EMAIL,NAME))));
         assert(ret == 0);
     }
     puts("=== END   main");
