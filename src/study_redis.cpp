@@ -249,7 +249,7 @@ int test_insert(const uint64_t& id, const std::string& email)
     }
 }
 
-int test_insert_lua(const uint64_t& id, const std::string& email, const uint64_t& timeout=3600/** 3600秒（1時間）の有効期限 */) {
+int test_insert_lua(const uint64_t& id, const std::string& email, const int64_t& timeout=3600/** 3600秒（1時間）の有効期限 */) {
     puts("------ test_insert_lua");
     try {
         // Luaスクリプトの定義
@@ -429,7 +429,8 @@ tmp::VarNode createTestData(const std::string& table, const std::string& ukey, c
     root.addChild("ukey", std::format("{}:{}", table, ukey));
     root.addChild("uvalue", std::format("{}", email));
     tmp::VarNode* data = root.addChild("data_redis", std::monostate{});
-    data->addChild("id", id);
+    // Redis に保存する値は、std::string に限定する。
+    data->addChild("id", std::to_string(id));
     data->addChild("email", email);
     data->addChild("name", name);
     return root;
@@ -464,8 +465,8 @@ int test_redis_VarNode()
         tmp::VarNode* dataRedis = root.getChild("data_redis");
         for(const auto& child: dataRedis->children ) {
             if(child->key == "id") {
-                uint64_t actualId = child->get<uint64_t>();
-                assert(actualId == ID);
+                std::string actualId = child->get<std::string>();
+                assert(actualId.compare(std::to_string(ID)) == 0);
             }
             else if(child->key == "email") {
                 std::string actualEmail = child->get<std::string>();
@@ -483,7 +484,7 @@ int test_redis_VarNode()
     }
 }
 
-int test_insert_lua(tmp::VarNode&& node)
+int test_insert_lua(tmp::VarNode&& node, const int64_t& timeout=3600/** 3600秒（1時間）の有効期限 */)
 {
     puts("------ test_insert_lua ... VarNode");
     try {
@@ -491,11 +492,52 @@ int test_insert_lua(tmp::VarNode&& node)
         tmp::VarNode* pvalue = node.getChild("pvalue");
         tmp::VarNode* ukey   = node.getChild("ukey");
         tmp::VarNode* uvalue = node.getChild("uvalue");
-        tmp::VarNode* data   = node.getChild("data_redis");
-        if(pkey && pvalue && ukey && uvalue && data) {
-            tmp::print_debug("TODO 実装");
+        tmp::VarNode* data_redis = node.getChild("data_redis");
+        if(pkey && pvalue && ukey && uvalue && data_redis) {
+            // Luaスクリプトの定義
+            // KEYS[1]: contractor_key, KEYS[2]: index_key
+            // ARGV[1]: email, ARGV[2]: id, ARGV[3...]: data (field, value, ...)
+            const std::string script = R"(
+                if redis.call('HEXISTS', KEYS[2], ARGV[1]) == 1 then
+                    return 0
+                end
+                redis.call('HSET', KEYS[1], unpack(ARGV, 3))
+                redis.call('HSET', KEYS[2], ARGV[1], ARGV[2])
+                return 1
+            )";
+            const std::string primary_key = pkey->get<std::string>();
+            const std::string unique_key  = ukey->get<std::string>();
+            // ARGVの構築（uvalue, pvalue, その後に本体データ）
+            std::vector<std::string> args = {uvalue->get<std::string>(), pvalue->get<std::string>()};
+            std::unordered_map<std::string, std::string> data = {};
+            for(const auto& child: data_redis->children) {
+                tmp::print_debug(child->get<std::string>());
+                data.insert({child->key, child->get<std::string>()});
+            }
+            for (const auto& [f, v] : data) {
+                args.push_back(f);
+                args.push_back(v);
+            }
+            // スクリプトの実行
+            // eval(script, keys_iterator, args_iterator)
+            // 第2引数の initializer_list を明示的に記述し、
+            // 第3, 4引数に args のイテレータを渡す
+            std::vector<std::string> keys = {primary_key, unique_key};
+            auto result = redis_.eval<long long>(
+                script,
+                keys.begin(),  // Key の開始
+                keys.end(),    // Key の終了
+                args.begin(),  // Arg の開始
+                args.end()     // Arg の終了
+            );
+            if (result == 1) {
+                std::cout << "Successfully inserted." << std::endl;
+                redis_.expire(primary_key, std::chrono::seconds(timeout));
+            } else {
+                std::cout << "Duplicate email found. Insertion aborted." << std::endl;
+            }
         } else {
-            throw std::runtime_error("NullPointer Exception.");
+            throw std::runtime_error("NullPointer Exception. The redis data is incomplete.");
         }
         return EXIT_SUCCESS;
     } catch(std::exception& e) {
@@ -512,7 +554,7 @@ int main()
         tmp::print_debug("Play and Result ... ", ret = test_connect());
         assert(ret == 0);
     }
-    if(1) {
+    if(0) {
         uint64_t id = 1ul;
         // RDBMS におけるユニークキ制約カラム
         std::string email = "derek@example.com";
