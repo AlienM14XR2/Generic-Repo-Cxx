@@ -382,6 +382,7 @@ int test_read(const uint64_t& id)
 {
     puts("------ test_read");
     try {
+        // テーブル名:プライマリキ
         const std::string contractor_key = std::format("contractor:{}", id);
         // 取得先のコンテナを用意
         std::unordered_map<std::string, std::string> result;
@@ -389,8 +390,12 @@ int test_read(const uint64_t& id)
         // 取得した全フィールドが result に格納される
         redis_.hgetall(contractor_key, std::inserter(result, result.begin()));
         // 内容の確認
-        for (const auto& [field, value] : result) {
-            std::cout << field << ": " << value << std::endl;
+        if(result.size() > 0) {
+            for (const auto& [field, value] : result) {
+                std::cout << field << ": " << value << std::endl;
+            }
+        } else {
+            tmp::print_debug("Caution!! I can't read data. Check your data.");
         }
         return EXIT_SUCCESS;
     } catch(std::exception& e) {
@@ -421,7 +426,7 @@ int test_read(const uint64_t& id)
  * email: RDBMS 等で管理されるユニークな値
  * name: ID で表現されるデータの別名
  */
-tmp::VarNode createTestData(const std::string& table, const std::string& ukey, const uint64_t& id, const std::string& email, const std::string& name)
+tmp::VarNode createTestData(const std::string& table, const std::string& ukey, const uint64_t& id, const std::string& companyId, const std::string& email, const std::string& name)
 {
     tmp::VarNode root("__root__", std::monostate{});    // Root ノードのKey とValue はなんでもよい（RDBMS NoSQL でも同じ）。
     root.addChild("pkey", std::format("{}:{}", table, id));
@@ -431,6 +436,7 @@ tmp::VarNode createTestData(const std::string& table, const std::string& ukey, c
     tmp::VarNode* data = root.addChild("data_redis", std::monostate{});
     // Redis に保存する値は、std::string に限定する。
     data->addChild("id", std::to_string(id));
+    data->addChild("company_id", companyId);
     data->addChild("email", email);
     data->addChild("name", name);
     return root;
@@ -442,11 +448,12 @@ int test_redis_VarNode()
     const std::string TABLE = "contractor";
     const std::string UKEY  = "email_to_id";
     const uint64_t    ID    = 1;
+    const std::string COMPANY_ID = "E1_3000";
     const std::string EMAIL = "derek@example.com";
     const std::string NAME  = "デレク";
     try {
-        tmp::VarNode root = createTestData(TABLE, UKEY, ID, EMAIL, NAME);
-        // 出力して目視確認：）
+        tmp::VarNode root = createTestData(TABLE, UKEY, ID, COMPANY_ID, EMAIL, NAME);
+        // 出力して目視確認
         tmp::debug_print_varnode(&root);
         // 真面目に比較検証 ... redis 特有の構造
         tmp::VarNode* pkey = root.getChild("pkey");
@@ -484,9 +491,9 @@ int test_redis_VarNode()
     }
 }
 
-int test_insert_lua(tmp::VarNode&& node, const int64_t& timeout=3600/** 3600秒（1時間）の有効期限 */)
+int test_Insert(tmp::VarNode&& node, const int64_t& timeout=3600/** 3600秒（1時間）の有効期限 */)
 {
-    puts("------ test_insert_lua ... VarNode");
+    puts("------ test_Insert ... Lua and VarNode");
     try {
         tmp::VarNode* pkey   = node.getChild("pkey");
         tmp::VarNode* pvalue = node.getChild("pvalue");
@@ -532,9 +539,69 @@ int test_insert_lua(tmp::VarNode&& node, const int64_t& timeout=3600/** 3600秒�
             );
             if (result == 1) {
                 std::cout << "Successfully inserted." << std::endl;
+                redis_.expire(unique_key, std::chrono::seconds(timeout));
                 redis_.expire(primary_key, std::chrono::seconds(timeout));
             } else {
                 std::cout << "Duplicate email found. Insertion aborted." << std::endl;
+            }
+        } else {
+            throw std::runtime_error("NullPointer Exception. The redis data is incomplete.");
+        }
+        return EXIT_SUCCESS;
+    } catch(std::exception& e) {
+        tmp::ptr_print_error<decltype(e)>(e);
+        return EXIT_FAILURE;
+    }
+}
+
+int test_Update(const uint64_t& id, tmp::VarNode&& node, const int64_t& timeout=3600/** 3600秒（1時間）の有効期限 */)
+{
+    puts("------ test_Update ... Lua and VarNode");
+    try {
+        tmp::VarNode* pkey   = node.getChild("pkey");
+        // tmp::VarNode* pvalue = node.getChild("pvalue");  // Insert と異なり、これは不用とする（仮引数として指定しているため）。
+        tmp::VarNode* ukey   = node.getChild("ukey");
+        tmp::VarNode* uvalue = node.getChild("uvalue");
+        tmp::VarNode* data_redis = node.getChild("data_redis");
+        if(pkey && ukey && uvalue && data_redis) {
+            const std::string update_script = R"(
+                local current_id = redis.call('HGET', KEYS[2], ARGV[1])
+                if current_id and current_id ~= ARGV[2] then
+                    return 0
+                end
+                -- 本体更新 (unpackはARGVの3番目から)
+                redis.call('HSET', KEYS[1], unpack(ARGV, 3))
+                -- インデックス更新
+                redis.call('HSET', KEYS[2], ARGV[1], ARGV[2])
+                return 1
+            )";
+            const std::string primary_key = pkey->get<std::string>();
+            const std::string unique_key  = ukey->get<std::string>();
+            // 引数パッキング
+            std::vector<std::string> args = {uvalue->get<std::string>(), std::to_string(id)};
+            std::unordered_map<std::string, std::string> data = {};
+            for(const auto& child: data_redis->children) {
+                tmp::print_debug(child->get<std::string>());
+                data.insert({child->key, child->get<std::string>()});
+            }
+            for (const auto& [f, v] : data) {
+                args.push_back(f);
+                args.push_back(v);
+            }
+            std::vector<std::string> keys = {primary_key, unique_key};
+            auto result = redis_.eval<long long>(
+                update_script,
+                keys.begin(),  // Key の開始
+                keys.end(),    // Key の終了
+                args.begin(),
+                args.end()
+            );
+            if (result == 1) {
+                std::cout << "Successfully updated." << std::endl;
+                redis_.expire(unique_key, std::chrono::seconds(timeout));
+                redis_.expire(primary_key, std::chrono::seconds(timeout));
+            } else {
+                std::cout << "Update aborted: Email already in use by another ID." << std::endl;
             }
         } else {
             throw std::runtime_error("NullPointer Exception. The redis data is incomplete.");
@@ -583,9 +650,16 @@ int main()
         const std::string TABLE = "contractor";
         const std::string UKEY  = "email_to_id";
         const uint64_t    ID    = 1;
+        const std::string COMPANY_ID = "E1_3000";
         const std::string EMAIL = "derek@example.com";
         const std::string NAME  = "デレク";
-        tmp::print_debug("Play and Result ... ", ret = test_insert_lua(std::move(createTestData(TABLE,UKEY,ID,EMAIL,NAME))));
+        tmp::print_debug("Play and Result ... ", ret = test_Insert(std::move(createTestData(TABLE,UKEY,ID,COMPANY_ID,EMAIL,NAME))));
+        assert(ret == 0);
+        tmp::print_debug("Play and Result (after insert check) ... ", ret = test_read(ID));
+        assert(ret == 0);
+        tmp::print_debug("Play and Result ... ", ret = test_Update(ID, std::move(createTestData(TABLE,UKEY,ID,"E1_3003",EMAIL,"デレク改"))));
+        assert(ret == 0);
+        tmp::print_debug("Play and Result (after update check) ... ", ret = test_read(ID));
         assert(ret == 0);
     }
     puts("=== END   main");
