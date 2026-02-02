@@ -288,6 +288,7 @@ int test_insert_lua(const uint64_t& id, const std::string& email, const int64_t&
         );
         if (result == 1) {
             std::cout << "Successfully inserted." << std::endl;
+            redis_.expire(index_key, std::chrono::seconds(timeout));
             redis_.expire(contractor_key, std::chrono::seconds(timeout));
         } else {
             std::cout << "Duplicate email found. Insertion aborted." << std::endl;
@@ -613,6 +614,54 @@ int test_Update(const uint64_t& id, tmp::VarNode&& node, const int64_t& timeout=
     }
 }
 
+tmp::VarNode createTestData(const std::string& table, const std::string& ukey, const uint64_t& id, const std::string& email)
+{
+    tmp::VarNode root("__root__", std::monostate{});    // Root ノードのKey とValue はなんでもよい（RDBMS NoSQL でも同じ）。
+    root.addChild("pkey", std::format("{}:{}", table, id));
+    root.addChild("ukey", std::format("{}:{}", table, ukey));
+    root.addChild("uvalue", std::format("{}", email));
+    return root;
+}
+
+// FIXME Repository remove() のシグネチャとの違いは、コンストラクタのオーバーロードで対処するのか？
+int test_Remove(tmp::VarNode&& node)
+{
+    puts("------ test_Remove ... lua and VarNode");
+    try {
+        tmp::VarNode* pkey   = node.getChild("pkey");
+        tmp::VarNode* ukey   = node.getChild("ukey");
+        tmp::VarNode* uvalue = node.getChild("uvalue");
+        if(pkey && ukey && uvalue) {
+            const std::string del_script = R"(
+                -- KEYS[1]: contractor:id
+                -- KEYS[2]: contractor:email_to_id
+                -- ARGV[1]: email
+                redis.call('DEL', KEYS[1])
+                return redis.call('HDEL', KEYS[2], ARGV[1])
+            )";
+            const std::string primary_key = pkey->get<std::string>();
+            const std::string unique_key  = ukey->get<std::string>();
+            // 実行例
+            auto removed = redis_.eval<long long>(
+                del_script,
+                {primary_key, unique_key},    // KEYS
+                {uvalue->get<std::string>()}  // ARGV
+            );
+            if(removed == 1) {
+                std::cout << "Successfully removed." << std::endl;
+            } else {
+                std::cout << "Removing aborted." << std::endl;
+            }
+        } else {
+            throw std::runtime_error("NullPointer Exception. The redis data is incomplete.");
+        }
+        return EXIT_SUCCESS;
+    } catch(std::exception& e) {
+        tmp::ptr_print_error<decltype(e)>(e);
+        return EXIT_FAILURE;
+    }
+}
+
 int main()
 {
     puts("START main ===");
@@ -660,6 +709,8 @@ int main()
         tmp::print_debug("Play and Result ... ", ret = test_Update(ID, std::move(createTestData(TABLE,UKEY,ID,"E1_3003",EMAIL,"デレク改"))));
         assert(ret == 0);
         tmp::print_debug("Play and Result (after update check) ... ", ret = test_read(ID));
+        assert(ret == 0);
+        tmp::print_debug("Play and Result ... ", ret = test_Remove(std::move(createTestData(TABLE,UKEY,ID,EMAIL))));
         assert(ret == 0);
     }
     puts("=== END   main");
