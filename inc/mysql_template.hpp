@@ -1,5 +1,5 @@
 /**
- * mysql_template.cpp
+ * mysql_template.hpp
  * 
  * 概要としては builder_template_m.cpp からの引き継ぎ。
  * リポジトリとエンティティに関する考察とサンプリングに始まり、現在はいかに複製コードを
@@ -374,21 +374,6 @@ public:
         }
         return tableStructure;
     }
-    // std::map<std::string, std::string> fetchTableMetadata()
-    // {
-    //     std::map<std::string, std::string> columnTypeMap;
-    //     // INFORMATION_SCHEMA を検索して型情報を取得
-    //     auto res = session->sql("SELECT COLUMN_NAME, DATA_TYPE "
-    //                             "FROM INFORMATION_SCHEMA.COLUMNS "
-    //                             "WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?"
-    //                         )
-    //                     .bind(dbName).bind(tableName).execute();
-    //     mysqlx::Row row;
-    //     while ((row = res.fetchOne())) {
-    //         columnTypeMap[row[0].get<std::string>()] = row[1].get<std::string>();
-    //     }
-    //     return columnTypeMap;
-    // }
 };
 
 template <class ID>

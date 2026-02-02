@@ -81,6 +81,7 @@ sudo ldconfig
  * e.g. compile
  * ```
  * g++ -O3 -DDEBUG -std=c++20 -pedantic-errors -Wall -Wextra -Werror -I../inc/ -I/usr/local/include -L/usr/local/lib study_redis.cpp VarNode.cpp -lredis++ -lhiredis -pthread -o ../bin/study_redis
+ * g++ -O3 -DDEBUG -std=c++20 -pedantic-errors -Wall -Werror -I../inc/ -I/usr/local/include -L/usr/local/lib study_redis.cpp VarNode.cpp -lredis++ -lhiredis -pthread -o ../bin/study_redis
  * ```
  */
 #include <iostream>
@@ -90,10 +91,11 @@ sudo ldconfig
 #include <cxxabi.h>
 #include <format>
 #include <sw/redis++/redis++.h>
-#include <Repository.hpp>
+#include <redis_template.hpp>
+
 
 sw::redis::Redis redis_factory(const int&);
-// 本テスト環境で利用すべき唯一のRedis オブジェクトと考えてください（意味合いとしては Singleton）。
+// 本テスト環境で利用すべき唯一のRedis オブジェクトと考える（意味合いとしては Singleton）。
 sw::redis::Redis redis_ = redis_factory(1);  // ここで DB 1番を選択
 
 sw::redis::Redis redis_factory(const int& _db)
@@ -662,6 +664,32 @@ int test_Remove(tmp::VarNode&& node)
     }
 }
 
+int test_VarNodeRepository_Insert()
+{
+    puts("------ test_VarNodeRepository_Insert");
+    using VarNodeRepository = tmp::redis::r1::VarNodeRepository<std::string>;
+    try {
+        const std::string table   = "contractor";
+        const uint64_t    primary = 1;
+        const std::string ukey    = "email_to_id";
+        const std::string uvalue  = "derek@example.com";
+        VarNodeRepository repo(redis_, table, std::to_string(primary), ukey, uvalue);
+
+        // 登録データの用意
+        tmp::VarNode root("__root__", std::monostate{});    // Root ノードのKey とValue はなんでもよい（RDBMS NoSQL でも同じ）。
+        root.addChild("id", std::to_string(primary));
+        root.addChild("company_id", std::string{"E1_3000"});
+        root.addChild("email", uvalue);
+        root.addChild("name", std::string{"デレク"});
+        std::string id = repo.insert(std::move(root));
+        tmp::print_debug("id: ", id);
+        return EXIT_SUCCESS;
+    } catch(std::exception& e) {
+        tmp::ptr_print_error<decltype(e)>(e);
+        return EXIT_FAILURE;
+    }
+}
+
 int main()
 {
     puts("START main ===");
@@ -693,7 +721,7 @@ int main()
         tmp::print_debug("Play and Result (2nd)... ", ret = test_remove_lua(id, email));
         assert(ret == 0);
     }
-    if(1) {
+    if(0) {
         tmp::print_debug("Play and Result ... ", ret = test_redis_VarNode());
         assert(ret == 0);
         const std::string TABLE = "contractor";
@@ -711,6 +739,10 @@ int main()
         tmp::print_debug("Play and Result (after update check) ... ", ret = test_read(ID));
         assert(ret == 0);
         tmp::print_debug("Play and Result ... ", ret = test_Remove(std::move(createTestData(TABLE,UKEY,ID,EMAIL))));
+        assert(ret == 0);
+    }
+    if(1) {
+        tmp::print_debug("Play and Result ... ", ret = test_VarNodeRepository_Insert());
         assert(ret == 0);
     }
     puts("=== END   main");

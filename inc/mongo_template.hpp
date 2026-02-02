@@ -1,5 +1,5 @@
 /**
- * mongodb_quickstart.cpp
+ * mongodb_quickstart.hpp
  * 
  * MongoDB C++ ドライバのインストール
  * ```

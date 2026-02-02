@@ -1,5 +1,5 @@
 /**
- * pqxx_template.cpp
+ * pqxx_template.hpp
  * 
  * e.g. 環境構築メモ
  * libpqxx のビルド
