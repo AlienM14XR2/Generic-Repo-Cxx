@@ -40,7 +40,7 @@ private:
     std::string uniqueValue;
     int64_t timeout;
 public:
-    // For insert, update
+    // For insert, update, remove
     VarNodeRepository(sw::redis::Redis& _redis,
         const std::string& _tableName,
         const std::string& _primaryValue,
@@ -172,7 +172,29 @@ public:
     }
     void remove(const ID& id) override
     {
-        // TODO 実装
+        const std::string del_script = R"(
+            -- KEYS[1]: contractor:id
+            -- KEYS[2]: contractor:email_to_id
+            -- ARGV[1]: email
+            redis.call('DEL', KEYS[1])
+            return redis.call('HDEL', KEYS[2], ARGV[1])
+        )";
+        const std::string primary_key = std::format("{}:{}", tableName, primaryValue);
+        const std::string unique_key  = std::format("{}:{}", tableName, uniqueKey);
+        if(id == primary_key) {
+            auto removed = redis.eval<long long>(
+                del_script,
+                {primary_key, unique_key},      // KEYS
+                {uniqueValue}                   // ARGV
+            );
+            if(removed == 1) {
+                std::cout << "Successfully removed." << std::endl;
+            } else {
+                std::cout << "Removing aborted." << std::endl;
+            }
+        } else {
+            std::cout << "No Removed. id is not same Repository setting." << std::endl;
+        }
     }
 };  // VarNodeRepository
 
