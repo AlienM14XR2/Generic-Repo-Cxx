@@ -706,6 +706,30 @@ int test_VarNodeRepository_Find(std::string* id)
     }
 }
 
+int test_VarNodeRepository_Update(std::string* id)
+{
+    puts("------ test_VarNodeRepository_Update");
+    using VarNodeRepository = tmp::redis::r1::VarNodeRepository<std::string>;
+    try {
+        const std::string table   = "contractor";
+        const uint64_t    primary = 1;
+        const std::string ukey    = "email_to_id";
+        const std::string uvalue  = "derek@example.com";
+        VarNodeRepository repo(redis_, table, std::to_string(primary), ukey, uvalue);
+
+        // 更新データの用意
+        tmp::VarNode root("__root__", std::monostate{});    // Root ノードのKey とValue はなんでもよい（RDBMS NoSQL でも同じ）。
+        root.addChild("id", std::to_string(primary));
+        root.addChild("company_id", std::string{"E1_3333"});
+        root.addChild("email", uvalue);
+        root.addChild("name", std::string{"デレク改"});
+        repo.update(*id, std::move(root));
+        return EXIT_SUCCESS;
+    } catch(std::exception& e) {
+        tmp::ptr_print_error<decltype(e)>(e);
+        return EXIT_FAILURE;
+    }
+}
 int main()
 {
     puts("START main ===");
@@ -760,6 +784,10 @@ int main()
     if(1) {
         std::string id{""};
         tmp::print_debug("Play and Result ... ", ret = test_VarNodeRepository_Insert(&id));
+        assert(ret == 0);
+        tmp::print_debug("Play and Result ... ", ret = test_VarNodeRepository_Find(&id));
+        assert(ret == 0);
+        tmp::print_debug("Play and Result ... ", ret = test_VarNodeRepository_Update(&id));
         assert(ret == 0);
         tmp::print_debug("Play and Result ... ", ret = test_VarNodeRepository_Find(&id));
         assert(ret == 0);

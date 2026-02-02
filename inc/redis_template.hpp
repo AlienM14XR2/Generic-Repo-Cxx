@@ -40,7 +40,7 @@ private:
     std::string uniqueValue;
     int64_t timeout;
 public:
-    // For insert
+    // For insert, update
     VarNodeRepository(sw::redis::Redis& _redis,
         const std::string& _tableName,
         const std::string& _primaryValue,
@@ -127,7 +127,48 @@ public:
     }
     void update(const ID& id, tmp::VarNode&& data) override
     {
-        // TODO 実装
+        const std::string update_script = R"(
+            local current_id = redis.call('HGET', KEYS[2], ARGV[1])
+            if current_id and current_id ~= ARGV[2] then
+                return 0
+            end
+            -- 本体更新 (unpackはARGVの3番目から)
+            redis.call('HSET', KEYS[1], unpack(ARGV, 3))
+            -- インデックス更新
+            redis.call('HSET', KEYS[2], ARGV[1], ARGV[2])
+            return 1
+        )";
+        const std::string primary_key = std::format("{}:{}", tableName, primaryValue);
+        const std::string unique_key  = std::format("{}:{}", tableName, uniqueKey);
+        if(id == primary_key) {
+            // 引数パッキング
+            std::vector<std::string> args = {uniqueValue, primaryValue};
+            std::unordered_map<std::string, std::string> map = {};
+            for(const auto& child: data.children) {
+                map.insert({child->key, child->get<std::string>()});
+            }
+            for (const auto& [f, v] : map) {
+                args.push_back(f);
+                args.push_back(v);
+            }
+            std::vector<std::string> keys = {primary_key, unique_key};
+            auto result = redis.eval<long long>(
+                update_script,
+                keys.begin(),  // Key の開始
+                keys.end(),    // Key の終了
+                args.begin(),
+                args.end()
+            );
+            if (result == 1) {
+                std::cout << "Successfully updated." << std::endl;
+                redis.expire(unique_key, std::chrono::seconds(timeout));
+                redis.expire(primary_key, std::chrono::seconds(timeout));
+            } else {
+                std::cout << "Update aborted: Email already in use by another ID." << std::endl;
+            }
+        } else {
+            std::cout << "No Updated. id is not same Repository setting." << std::endl;
+        }
     }
     void remove(const ID& id) override
     {
