@@ -38,8 +38,9 @@ private:
     std::string primaryValue;
     std::string uniqueKey;
     std::string uniqueValue;
-    const int64_t timeout;
+    int64_t timeout;
 public:
+    // For insert
     VarNodeRepository(sw::redis::Redis& _redis,
         const std::string& _tableName,
         const std::string& _primaryValue,
@@ -48,10 +49,12 @@ public:
         const int64_t _timeout = 3600   // 3600秒（1時間）の有効期限
     ) : redis{_redis}, tableName{_tableName}, primaryValue{_primaryValue}, uniqueKey{_uniqueKey}, uniqueValue{_uniqueValue}, timeout{_timeout}
     {}
+    // For find
+    VarNodeRepository(sw::redis::Redis& _redis) : redis{_redis}
+    {}
 
     ID insert(tmp::VarNode&& data) override
     {
-        // TODO 実装
         int status;
         tmp::print_debug("insert ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
         // Luaスクリプトの定義
@@ -99,8 +102,27 @@ public:
         }
         return primary_key;
     }
+
     std::optional<tmp::VarNode> findById(const ID& id) const override
     {
+        int status;
+        tmp::print_debug("findById ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
+        // テーブル名:プライマリキ
+        // const std::string primary_key = std::format("{}:{}", tableName, id);
+        // 取得先のコンテナを用意
+        std::unordered_map<std::string, std::string> result;
+        // hgetall(key, output_iterator)
+        // 取得した全フィールドが result に格納される
+        redis.hgetall(id, std::inserter(result, result.begin()));
+        // 内容の確認
+        if(result.size() > 0) {
+            tmp::VarNode node("result_row_redis", std::monostate{});;
+            for (const auto& [field, value] : result) {
+                node.addChild(field, value);
+                // std::cout << field << ": " << value << std::endl;
+            }
+            return node;
+        }
         return std::nullopt;
     }
     void update(const ID& id, tmp::VarNode&& data) override

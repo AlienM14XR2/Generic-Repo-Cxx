@@ -664,7 +664,7 @@ int test_Remove(tmp::VarNode&& node)
     }
 }
 
-int test_VarNodeRepository_Insert()
+int test_VarNodeRepository_Insert(std::string* id)
 {
     puts("------ test_VarNodeRepository_Insert");
     using VarNodeRepository = tmp::redis::r1::VarNodeRepository<std::string>;
@@ -681,8 +681,24 @@ int test_VarNodeRepository_Insert()
         root.addChild("company_id", std::string{"E1_3000"});
         root.addChild("email", uvalue);
         root.addChild("name", std::string{"デレク"});
-        std::string id = repo.insert(std::move(root));
-        tmp::print_debug("id: ", id);
+        *id = repo.insert(std::move(root));
+        tmp::print_debug("id: ", *id);
+        return EXIT_SUCCESS;
+    } catch(std::exception& e) {
+        tmp::ptr_print_error<decltype(e)>(e);
+        return EXIT_FAILURE;
+    }
+}
+
+int test_VarNodeRepository_Find(std::string* id)
+{
+    puts("------ test_VarNodeRepository_Find");
+    using VarNodeRepository = tmp::redis::r1::VarNodeRepository<std::string>;
+    try {
+        VarNodeRepository repo{redis_};
+        std::optional<tmp::VarNode> result = repo.findById(*id);
+        if(result) tmp::debug_print_varnode(&result.value());
+        else throw std::runtime_error("Unexpected Exception. Not found data.");
         return EXIT_SUCCESS;
     } catch(std::exception& e) {
         tmp::ptr_print_error<decltype(e)>(e);
@@ -742,7 +758,10 @@ int main()
         assert(ret == 0);
     }
     if(1) {
-        tmp::print_debug("Play and Result ... ", ret = test_VarNodeRepository_Insert());
+        std::string id{""};
+        tmp::print_debug("Play and Result ... ", ret = test_VarNodeRepository_Insert(&id));
+        assert(ret == 0);
+        tmp::print_debug("Play and Result ... ", ret = test_VarNodeRepository_Find(&id));
         assert(ret == 0);
     }
     puts("=== END   main");
