@@ -19,6 +19,11 @@ pkg_check_modules(MONGOCXX REQUIRED libmongocxx)
 # base64pp (追加)
 pkg_check_modules(BASE64PP REQUIRED base64pp)
 
+# Redis++ (追加)
+# hiredis と redis++ の両方が必要
+pkg_check_modules(REDISPP REQUIRED redis++)
+pkg_check_modules(HIREDIS REQUIRED hiredis)
+
 # --- 共通のコンパイルオプション定義 ---
 set(COMMON_COMPILE_OPTIONS 
     -Wall 
@@ -118,6 +123,26 @@ target_link_libraries(varnode_test_runner PRIVATE
 target_compile_options(varnode_test_runner PRIVATE ${COMMON_COMPILE_OPTIONS})
 target_compile_definitions(varnode_test_runner PRIVATE ${COMMON_COMPILE_DEFINITIONS})
 
+
+# 6. Redis++ テストランナー
+add_executable(redis_template_test_runner src/redis_template_test.cpp src/VarNode.cpp)
+target_include_directories(redis_template_test_runner PRIVATE 
+    inc 
+    ${REDISPP_INCLUDE_DIRS}
+    ${HIREDIS_INCLUDE_DIRS}
+    ${BASE64PP_INCLUDE_DIRS}
+    ${GTEST_INCLUDE_DIRS}
+)
+target_link_libraries(redis_template_test_runner PRIVATE 
+    ${REDISPP_LIBRARIES}
+    ${HIREDIS_LIBRARIES}
+    ${BASE64PP_LIBRARIES}
+    pthread             # redis++ は通常 pthread を必要とします
+    GTest::gtest_main 
+)
+target_compile_options(redis_template_test_runner PRIVATE ${COMMON_COMPILE_OPTIONS})
+target_compile_definitions(redis_template_test_runner PRIVATE ${COMMON_COMPILE_DEFINITIONS})
+
 # --- 共有ライブラリの定義 ---
 add_library(varnode_bridge SHARED 
     src/VarNode.cpp 
@@ -131,7 +156,9 @@ target_link_libraries(varnode_bridge PRIVATE
     mysqlcppconnx
     ${MONGOCXX_LIBRARIES}
     bson2
-    ${BASE64PP_LIBRARIES}    # 追加
+    ${BASE64PP_LIBRARIES}
+    ${REDISPP_LIBRARIES}    # 追加
+    ${HIREDIS_LIBRARIES}    # 追加
 )
 
 target_include_directories(varnode_bridge PRIVATE 
@@ -141,7 +168,9 @@ target_include_directories(varnode_bridge PRIVATE
     ${PQXX_INCLUDE_DIRS}
     ${PQ_INCLUDE_DIRS}
     ${MONGOCXX_INCLUDE_DIRS}
-    ${BASE64PP_INCLUDE_DIRS} # 追加
+    ${BASE64PP_INCLUDE_DIRS}
+    ${REDISPP_INCLUDE_DIRS}  # 追加
+    ${HIREDIS_INCLUDE_DIRS}  # 追加
 )
 
 target_compile_options(varnode_bridge PRIVATE ${COMMON_COMPILE_OPTIONS})

@@ -33,7 +33,7 @@ template <class ID>
 class VarNodeRepository final : public tmp::Repository<ID, tmp::VarNode>
 {
 private:
-    sw::redis::Redis& redis;
+    std::shared_ptr<sw::redis::Redis> redis;
     std::string tableName;
     std::string primaryValue;
     std::string uniqueKey;
@@ -41,17 +41,27 @@ private:
     int64_t timeout;
 public:
     // For insert, update, remove
-    VarNodeRepository(sw::redis::Redis& _redis,
+    VarNodeRepository(std::shared_ptr<sw::redis::Redis> _redis,
         const std::string& _tableName,
         const std::string& _primaryValue,
         const std::string& _uniqueKey,
         const std::string& _uniqueValue,
         const int64_t _timeout = 3600   // 3600秒（1時間）の有効期限
-    ) : redis{_redis}, tableName{_tableName}, primaryValue{_primaryValue}, uniqueKey{_uniqueKey}, uniqueValue{_uniqueValue}, timeout{_timeout}
-    {}
+    ) : redis{std::move(_redis)}, tableName{_tableName}, primaryValue{_primaryValue}, uniqueKey{_uniqueKey}, uniqueValue{_uniqueValue}, timeout{_timeout}
+    {
+        if (!redis) {
+            throw std::invalid_argument("Redis connection pointer is null.");
+        }
+    }
     // For find
-    VarNodeRepository(sw::redis::Redis& _redis) : redis{_redis}
-    {}
+    VarNodeRepository(std::shared_ptr<sw::redis::Redis> _redis) : redis{std::move(_redis)}
+    {
+        if (!redis) {
+            throw std::invalid_argument("Redis connection pointer is null.");
+        }
+    }
+    // デストラクタ
+    ~VarNodeRepository() override = default;
 
     ID insert(tmp::VarNode&& data) override
     {
@@ -86,7 +96,7 @@ public:
         // 第2引数の initializer_list を明示的に記述し、
         // 第3, 4引数に args のイテレータを渡す
         std::vector<std::string> keys = {primary_key, unique_key};
-        auto result = redis.eval<long long>(
+        auto result = redis->eval<long long>(
             script,
             keys.begin(),  // Key の開始
             keys.end(),    // Key の終了
@@ -95,8 +105,8 @@ public:
         );
         if (result == 1) {
             std::cout << "Successfully inserted." << std::endl;
-            redis.expire(unique_key, std::chrono::seconds(timeout));
-            redis.expire(primary_key, std::chrono::seconds(timeout));
+            redis->expire(unique_key, std::chrono::seconds(timeout));
+            redis->expire(primary_key, std::chrono::seconds(timeout));
         } else {
             std::cout << "Duplicate unique value found. Insertion aborted." << std::endl;
         }
@@ -113,7 +123,7 @@ public:
         std::unordered_map<std::string, std::string> result;
         // hgetall(key, output_iterator)
         // 取得した全フィールドが result に格納される
-        redis.hgetall(id, std::inserter(result, result.begin()));
+        redis->hgetall(id, std::inserter(result, result.begin()));
         // 内容の確認
         if(result.size() > 0) {
             tmp::VarNode node("result_row_redis", std::monostate{});;
@@ -152,7 +162,7 @@ public:
                 args.push_back(v);
             }
             std::vector<std::string> keys = {primary_key, unique_key};
-            auto result = redis.eval<long long>(
+            auto result = redis->eval<long long>(
                 update_script,
                 keys.begin(),  // Key の開始
                 keys.end(),    // Key の終了
@@ -161,8 +171,8 @@ public:
             );
             if (result == 1) {
                 std::cout << "Successfully updated." << std::endl;
-                redis.expire(unique_key, std::chrono::seconds(timeout));
-                redis.expire(primary_key, std::chrono::seconds(timeout));
+                redis->expire(unique_key, std::chrono::seconds(timeout));
+                redis->expire(primary_key, std::chrono::seconds(timeout));
             } else {
                 std::cout << "Update aborted: Email already in use by another ID." << std::endl;
             }
@@ -182,7 +192,7 @@ public:
         const std::string primary_key = std::format("{}:{}", tableName, primaryValue);
         const std::string unique_key  = std::format("{}:{}", tableName, uniqueKey);
         if(id == primary_key) {
-            auto removed = redis.eval<long long>(
+            auto removed = redis->eval<long long>(
                 del_script,
                 {primary_key, unique_key},      // KEYS
                 {uniqueValue}                   // ARGV
