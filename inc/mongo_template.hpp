@@ -266,8 +266,7 @@ private:
     {}
     virtual std::string insert(Data&& data) override
     {
-        int status;
-        print_debug("insert ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
+        tmp::print_debug("insert ... tmp::mongo::r1::VarNodeRepository");
         // DONE ... db "USER"のハードコードこれは、コンストラクタの引数にする。
         auto db = (*client)[dbName];
         // DONE ... collection "contractor"のハードコードこれは、コンストラクタの引数にする。
@@ -310,8 +309,7 @@ private:
     }
     virtual void update(const std::string& id, Data&& data) override
     {
-        int status;
-        print_debug("update ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
+        tmp::print_debug("update ... tmp::mongo::r1::VarNodeRepository");
         // DONE ... db "USER"のハードコードこれは、コンストラクタの引数にする。
         auto db = (*client)[dbName];
         // DONE ... collection "contractor"のハードコードこれは、コンストラクタの引数にする。
@@ -360,8 +358,7 @@ private:
     }
     virtual void remove(const std::string& id) override
     {
-        int status;
-        print_debug("remove ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
+        tmp::print_debug("remove ... tmp::mongo::r1::VarNodeRepository");
         // DONE ... db "USER"のハードコードこれは、コンストラクタの引数にする。
         auto db = (*client)[dbName];
         // DONE ... collection "contractor"のハードコードこれは、コンストラクタの引数にする。
@@ -378,8 +375,7 @@ private:
     }
     virtual std::optional<Data> findById(const std::string& id) const override
     {
-        int status;
-        print_debug("find ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
+        tmp::print_debug("findById ... tmp::mongo::r1::VarNodeRepository");
         // DONE ... db "USER"のハードコードこれは、コンストラクタの引数にする。
         auto db = (*client)[dbName];
         // DONE ... collection "contractor"のハードコードこれは、コンストラクタの引数にする。

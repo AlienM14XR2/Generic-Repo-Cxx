@@ -397,8 +397,7 @@ public:
 
     ID insert(tmp::VarNode&& data) override
     {
-        int status;
-        tmp::print_debug("insert ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
+        tmp::print_debug("insert ... tmp::mysql::r3::VarNodeRepository");
         std::vector<std::string> cols;
         for(size_t i=0; i < data.children.size(); i++) {
             cols.push_back(data.children[i]->key);
@@ -417,8 +416,7 @@ public:
     // findByIdの実装
     std::optional<tmp::VarNode> findById(const ID& id) const override
     {
-        int status;
-        tmp::print_debug("findById ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
+        tmp::print_debug("findById ... tmp::mysql::r3::VarNodeRepository");
         SqlFindHelper findHelper{session, dbName, tableName};
         std::list<std::string> select_string = findHelper.selectStr(findHelper.buildSelectFields(findHelper.fetchTableMetadata()));
         // ここからは元のロジックを維持
@@ -440,7 +438,7 @@ public:
         // Columns オブジェクトを参照で受け取る (size() 等は使えない)
         const auto& meta = rows.getColumns();
         // VarNode は tmp::VarNode を想定
-        tmp::VarNode result_entity("result_row", std::monostate{});
+        tmp::VarNode result_entity("result_row_mysql", std::monostate{});
         // インデックスではなく、範囲ベース for ループとカウンタを併用する
         size_t i = 0;
         for (const auto& col_meta : meta) {
@@ -460,15 +458,12 @@ public:
 
     void update(const ID& id, tmp::VarNode&& data) override
     {
-        int status;
-        tmp::print_debug("update ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
-        
+        tmp::print_debug("update ... tmp::mysql::r3::VarNodeRepository");
         // 借りたセッションを使用してデータベース操作を実行
         mysqlx::Schema db{session->getSchema(dbName)};
         mysqlx::Table table{db.getTable(tableName)};
         // 1. まず update ステートメントを開始する
         auto tableUpdate = table.update();
-
         // 2. VarNode の子ノード（更新対象カラム）をループ処理し、動的に set() を呼び出す
         for (const auto& child : data.children) {
             // ... (visit のロジックは変更なし) ...
@@ -495,10 +490,10 @@ public:
                                         .execute();
         tmp::print_debug("affected items count: ", res.getAffectedItemsCount());
     }
+
     void remove(const ID& id) override
     {
-        int status;
-        tmp::print_debug("remove ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
+        tmp::print_debug("remove ... tmp::mysql::r3::VarNodeRepository");
         mysqlx::Schema db{session->getSchema(dbName)};
         mysqlx::Table table{db.getTable(tableName)};
         std::string condition = primaryKeyName + " = :id";

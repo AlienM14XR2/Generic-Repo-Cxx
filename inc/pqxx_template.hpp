@@ -278,8 +278,7 @@ public:
     {}
     ID insert(tmp::VarNode&& data) override
     {
-        int status;
-        tmp::print_debug("insert ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
+        tmp::print_debug("insert ... tmp::postgres::r3::VarNodeRepository");
         ID id = tx->query_value<ID>(SqlBuilder::nextvalSql(idSeqName));
         tmp::print_debug("nextval: ", id);
         // 悩ましい問題だが、id（プラマリキ）はリポジトリ内部で値が決定され、data 上の値を更新するものとする。
@@ -298,8 +297,7 @@ public:
     }
     void update(const ID& id, tmp::VarNode&& data) override
     {
-        int status;
-        tmp::print_debug("update ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
+        tmp::print_debug("update ... tmp::postgres::r3::VarNodeRepository");
         // DONE ... VarNode から動的にUpdate SQL を作る。
         std::string sql = SqlBuilder::updateSql(tableName, data);
         tmp::print_debug("sql: ", sql);
@@ -315,8 +313,7 @@ public:
     }
     void remove(const ID& id) override
     {
-        int status;
-        tmp::print_debug("remove ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
+        tmp::print_debug("remove ... tmp::postgres::r3::VarNodeRepository");
         std::string sql = tmp::postgres::helper::delete_by_pkey_sql(tableName, primaryKeyName);
         tmp::print_debug("sql: ", sql);
         SqlBuilder builder{generate_uid(), sql};
@@ -326,8 +323,7 @@ public:
     }
     std::optional<tmp::VarNode> findById(const ID& id) const override
     {
-        int status;
-        tmp::print_debug("findById ... ", abi::__cxa_demangle(typeid(*this).name(),0,0,&status));
+        tmp::print_debug("findById ... tmp::postgres::r3::VarNodeRepository");
         // Step 1 データベースへの問い合わせを行う。
         std::string sql = tmp::postgres::helper::select_by_pkey_sql(tableName, primaryKeyName);
         tmp::print_debug("sql: ", sql);
@@ -338,7 +334,7 @@ public:
         // Step 2 pqxx::result からVarNode の作成。
         // 結果は最大1行なので、ループではなく if (!result.empty()) で処理する
         if(!result.empty()) {
-            VarNode result_entity("result_row", std::monostate{});
+            VarNode result_entity("result_row_pqxx", std::monostate{});
             const auto& row = result[0];
             for (const auto& field : row) {
                 result_entity.addChild(field.name(), convertPqFieldToVarNode(field));
