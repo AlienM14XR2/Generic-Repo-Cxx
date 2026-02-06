@@ -460,6 +460,8 @@ concept CrudNeeds = requires(Data& d, Model& m) {
 };
 template<class Data, class Model>
 requires CrudNeeds<Data, Model>
+// この形はData をステートフルとして扱うためよくないかな。
+// Data は外部からメンバ関数の仮引数とすべきだと考える。
 class CrudModel final : public CrudConcept<Data>
 {
 private:
