@@ -90,7 +90,11 @@ default-character-set=utf8mb4
  * 
  * MySQL C++ Connector について
  * ```
+ * # 「MySQL APT リポジトリの追加」
+ * https://dev.mysql.com/downloads/repo/apt/
+ * sudo dpkg -i mysql-apt-config_0.8.36-1_all.deb
  * sudo apt update
+ * 
  * # MySQL Connector/C++ の開発パッケージをインストールします
  * sudo apt install libmysqlcppconn-dev
  * # インストールライブラリの所在確認
